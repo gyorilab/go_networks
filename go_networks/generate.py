@@ -25,7 +25,7 @@ INDRA_SIF_PICKLE = 'db_dump_df.pkl'
 go_dag = GODag(GO_OBO_PATH)
 
 
-def _load_goa_gaf():
+def load_goa_gaf():
     """Load the gene/GO annotations as a pandas data frame."""
     goa_ec = {'EXP', 'IDA', 'IPI', 'IMP', 'IGI', 'IEP', 'HTP', 'HDA', 'HMP',
               'HGI', 'HEP', 'IBA', 'IBD'}
@@ -59,7 +59,7 @@ def _load_goa_gaf():
     return goa
 
 
-goa = _load_goa_gaf()
+goa = load_goa_gaf()
 
 
 def load_indra_df(fname):
@@ -98,7 +98,7 @@ def download_statements(df):
     for idx, group in enumerate(batch_iter(df.hash, 500)):
         logger.info('Getting statement batch %d' % idx)
         idbp = indra_db_rest.get_statements_by_hash(list(group),
-                                                    ev_limit=50)
+                                                    ev_limit=10)
         all_stmts += idbp.statements
     return all_stmts
 
@@ -175,20 +175,27 @@ def format_and_upload_network(ncx, **ndex_args):
 
 def assemble_nework_stmts(go_id):
     """For a given GO ID, featch and assemble the statements."""
-    logger.info('Looking at %s (%s)' % (go_id, go_dag[go_id].name))
+    go_name = go_dag[go_id].name
+    metadata = {'go_name': go_name}
+    logger.info('Looking at %s (%s)' % (go_id, go_name))
     genes = get_genes_for_go_id(go_id)
     logger.info('%d genes for %s' % (len(genes), go_id))
-    if len(genes) < 5 or len(genes) > 50:
+    metadata['num_genes'] = len(genes)
+    if len(genes) < min_gene_count or len(genes) > max_gene_count:
         logger.info('Skipping: too few or too many genes.')
-        return None
+        return None, metadata
     df = filter_to_genes(indra_df, genes)
+    metadata['num_df_rows'] = len(df)
     if len(df) == 0:
         logger.info('Skipping: no statements found between genes.')
-        return None
+        return None, metadata
     stmts = download_statements(df)
+    metadata['num_all_raw_stmts'] = len(stmts)
     stmts = filter_out_medscan(stmts)
+    metadata['num_filtered_raw_stmts'] = len(stmts)
     stmts = assemble_statements(stmts, genes)
-    return stmts
+    metadata['num_assembled_stmts'] = len(stmts)
+    return stmts, metadata
 
 
 def make_cx_networks(stmts, go_id):
@@ -214,6 +221,8 @@ def make_cx_networks(stmts, go_id):
 
 
 if __name__ == '__main__':
+    min_gene_count = 5
+    max_gene_count = 200
     network_set_id = '4b7b1e45-b494-11e9-8bb4-0ac135e8bacf'
     style_network_id = '145a6a47-78ee-11e9-848d-0ac135e8bacf'
     username, password = ndex_client.get_default_ndex_cred(ndex_cred=None)
@@ -224,15 +233,36 @@ if __name__ == '__main__':
     go_ids = get_go_ids()
     start = None
     started = False
+
+    # Stage 1. Generate networks
+    networks = {}
+    metadata = {}
     for go_id in go_ids:
         if not start or go_id == start:
             started = True
         if not started:
             continue
-        stmts = assemble_nework_stmts(go_id)
+        stmts, md = assemble_nework_stmts(go_id)
+        if stmts is None:
+            metadata[go_id]['included'] = False
+            continue
+        metadata[go_id] = md
         ncx = make_cx_networks(stmts, go_id)
+        metadata[go_id]['num_ncx_nodes'] = len(ncx.nodes)
         if not ncx.nodes:
+            metadata[go_id]['included'] = False
             logger.info('Skipping: no nodes in network.')
             continue
+        metadata[go_id]['included'] = True
+        networks[go_id] = ncx
+
+    with open('networks.pkl', 'wb') as fh:
+        pickle.dump(networks, fh)
+
+    with open('metadata.pkl', 'wb') as fh:
+        pickle.dump(metadata, fh)
+
+    # Stage 2. Upload networks
+    for go_ids, ncx in networks.items():
         network_id = format_and_upload_network(ncx, **ndex_args)
         logger.info('Uploaded network with ID: %s' % network_id)
