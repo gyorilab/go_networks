@@ -20,7 +20,7 @@ logger = logging.getLogger('go_networks')
 
 GO_OBO_PATH = 'go.obo'
 GO_ANNOTS_PATH = 'goa_human.gaf'
-INDRA_SIF_PICKLE = 'db.pkl'
+INDRA_SIF_PICKLE = 'db_dump_df.pkl'
 
 go_dag = GODag(GO_OBO_PATH)
 
@@ -162,6 +162,7 @@ def get_go_ids():
 
 
 def format_and_upload_network(ncx, **ndex_args):
+    """Take a NiceCXNetwork and upload it to NDEx."""
     ncx.apply_template(uuid=style_network_id, **ndex_args)
     network_url = ncx.upload_to(**ndex_args)
     network_id = network_url.split('/')[-1]
@@ -170,6 +171,46 @@ def format_and_upload_network(ncx, **ndex_args):
     nd.make_network_public(network_id)
     nd.add_networks_to_networkset(network_set_id, [network_id])
     return network_id
+
+
+def assemble_nework_stmts(go_id):
+    """For a given GO ID, featch and assemble the statements."""
+    logger.info('Looking at %s (%s)' % (go_id, go_dag[go_id].name))
+    genes = get_genes_for_go_id(go_id)
+    logger.info('%d genes for %s' % (len(genes), go_id))
+    if len(genes) < 5 or len(genes) > 50:
+        logger.info('Skipping: too few or too many genes.')
+        return None
+    df = filter_to_genes(indra_df, genes)
+    if len(df) == 0:
+        logger.info('Skipping: no statements found between genes.')
+        return None
+    stmts = download_statements(df)
+    stmts = filter_out_medscan(stmts)
+    stmts = assemble_statements(stmts, genes)
+    return stmts
+
+
+def make_cx_networks(stmts, go_id):
+    network_name = '%s (%s)' % (go_id, go_dag[go_id].name)
+    logger.info('===============================')
+    network_attributes = {
+        'networkType': 'pathway',
+        'GO ID': go_id,
+        'GO hierarchy': 'biological process',
+        'Prov:wasGeneratedBy': 'INDRA',
+        'Organism': 'Homo sapiens (Human)',
+        'Description': go_dag[go_id].name,
+        'Methods': 'This network was assembled automatically by INDRA ('
+                   'http://indra.bio) by processing all available '
+                   'biomedical literature with multiple machine reading '
+                   'systems, and integrating curated pathway '
+                   'databases. The network represents '
+                   'mechanistic interactions between genes/proteins that '
+                   'are associated with this GO process.',
+    }
+    ncx = get_cx_network(stmts, network_name, network_attributes)
+    return ncx
 
 
 if __name__ == '__main__':
@@ -188,38 +229,8 @@ if __name__ == '__main__':
             started = True
         if not started:
             continue
-        logger.info('===============================')
-        go_name = go_dag[go_id].name
-        logger.info('Looking at %s (%s)' % (go_id, go_name))
-        network_name = '%s (%s)' % (go_id, go_name)
-        genes = get_genes_for_go_id(go_id)
-        logger.info('%d genes for %s' % (len(genes), go_id))
-        if len(genes) < 5 or len(genes) > 50:
-            logger.info('Skipping: too few or too many genes.')
-            continue
-        df = filter_to_genes(indra_df, genes)
-        if len(df) == 0:
-            logger.info('Skipping: no statements found between genes.')
-            continue
-        stmts = download_statements(df)
-        stmts = filter_out_medscan(stmts)
-        stmts = assemble_statements(stmts, genes)
-        network_attributes = {
-            'networkType': 'pathway',
-            'GO ID': go_id,
-            'GO hierarchy': 'biological process',
-            'Prov:wasGeneratedBy': 'INDRA',
-            'Organism': 'Homo sapiens (Human)',
-            'Description': go_dag[go_id].name,
-            'Methods': 'This network was assembled automatically by INDRA ('
-                       'http://indra.bio) by processing all available '
-                       'biomedical literature with multiple machine reading '
-                       'systems, and integrating curated pathway '
-                       'databases. The network represents '
-                       'mechanistic interactions between genes/proteins that '
-                       'are associated with this GO process.',
-        }
-        ncx = get_cx_network(stmts, network_name, network_attributes)
+        stmts = assemble_nework_stmts(go_id)
+        ncx = make_cx_networks(stmts, go_id)
         if not ncx.nodes:
             logger.info('Skipping: no nodes in network.')
             continue
