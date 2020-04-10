@@ -1,10 +1,12 @@
+import os
 import copy
 import pickle
+import obonet
 import logging
+import networkx
 import itertools
 import pandas as pd
 import ndex2.client
-from goatools.obo_parser import GODag
 from indra.util import batch_iter
 from indra.statements import Complex
 from indra.sources import indra_db_rest
@@ -18,17 +20,16 @@ from indra.preassembler.custom_preassembly import agents_stmt_type_matches
 
 logger = logging.getLogger('go_networks')
 
-GO_OBO_PATH = 'go.obo'
-GO_ANNOTS_PATH = 'goa_human.gaf'
-INDRA_SIF_PICKLE = 'db_dump_df.pkl'
+HERE = os.path.dirname(os.path.abspath(__file__))
+GO_OBO_PATH = os.path.join(HERE, os.pardir, 'go.obo')
+GO_ANNOTS_PATH = os.path.join(HERE, os.pardir, 'goa_human.gaf')
+INDRA_SIF_PICKLE = '/Users/ben/data/db_dump_df.pkl'
 
-go_dag = GODag(GO_OBO_PATH)
+go_dag = obonet.read_obo(GO_OBO_PATH)
 
 
 def load_goa_gaf():
     """Load the gene/GO annotations as a pandas data frame."""
-    goa_ec = {'EXP', 'IDA', 'IPI', 'IMP', 'IGI', 'IEP', 'HTP', 'HDA', 'HMP',
-              'HGI', 'HEP', 'IBA', 'IBD'}
     goa = pd.read_csv(GO_ANNOTS_PATH, sep='\t',
                       skiprows=23, dtype=str,
                       header=None,
@@ -53,9 +54,6 @@ def load_goa_gaf():
     # Filter out all "NOT" negative evidences
     goa['Qualifier'].fillna('', inplace=True)
     goa = goa[~goa['Qualifier'].str.startswith('NOT')]
-    # Filter to rows with evidence code corresponding to experimental
-    # evidence
-    goa = goa[goa['Evidence_Code'].isin(goa_ec)]
     return goa
 
 
@@ -95,7 +93,7 @@ def download_statements(df):
     """Download the INDRA Statements corresponding to entries in a data frame.
     """
     all_stmts = []
-    for idx, group in enumerate(batch_iter(df.hash, 500)):
+    for idx, group in enumerate(batch_iter(df.stmt_hash, 500)):
         logger.info('Getting statement batch %d' % idx)
         idbp = indra_db_rest.get_statements_by_hash(list(group),
                                                     ev_limit=10)
@@ -137,12 +135,20 @@ def assemble_statements(stmts, genes):
     return stmts
 
 
-def get_genes_for_go_id(go_id):
-    """Return genes that are annotated with a given go ID."""
+def get_genes_for_go_id_direct(go_id):
     df = goa[goa['GO_ID'] == go_id]
     up_ids = sorted(list(set(df['DB_ID'])))
     gene_names = [uniprot_client.get_gene_name(up_id) for up_id in up_ids]
     gene_names = [g for g in gene_names if g]
+    return gene_names
+
+
+def get_genes_for_go_id(go_id):
+    """Return genes that are annotated with a given go ID."""
+    gene_names = get_genes_for_go_id_direct(go_id)
+    for child_go_id in networkx.ancestors(go_dag, go_id):
+        gene_names += get_genes_for_go_id_direct(child_go_id)
+    gene_names = sorted(set(gene_names))
     return gene_names
 
 
@@ -156,8 +162,8 @@ def get_cx_network(stmts, name, network_attributes):
 
 def get_go_ids():
     """Get a list of all GO IDs."""
-    go_ids = [k for k, v in go_dag.items() if not v.is_obsolete
-              and v.namespace == 'biological_process']
+    go_ids = [k for k, v in go_dag.items()
+              if v.namespace == 'biological_process']
     return go_ids
 
 
@@ -173,7 +179,7 @@ def format_and_upload_network(ncx, **ndex_args):
     return network_id
 
 
-def assemble_nework_stmts(go_id):
+def assemble_network_stmts(go_id):
     """For a given GO ID, featch and assemble the statements."""
     go_name = go_dag[go_id].name
     metadata = {'go_name': go_name}
@@ -231,20 +237,14 @@ if __name__ == '__main__':
                  'password': password}
     indra_df = load_indra_df(INDRA_SIF_PICKLE)
     go_ids = get_go_ids()
-    start = None
-    started = False
 
     # Stage 1. Generate networks
     networks = {}
     metadata = {}
     for go_id in go_ids:
-        if not start or go_id == start:
-            started = True
-        if not started:
-            continue
-        stmts, md = assemble_nework_stmts(go_id)
+        stmts, md = assemble_network_stmts(go_id)
         if stmts is None:
-            metadata[go_id]['included'] = False
+            metadata[go_id] = {'included': False}
             continue
         metadata[go_id] = md
         ncx = make_cx_networks(stmts, go_id)
@@ -263,6 +263,6 @@ if __name__ == '__main__':
         pickle.dump(metadata, fh)
 
     # Stage 2. Upload networks
-    for go_ids, ncx in networks.items():
-        network_id = format_and_upload_network(ncx, **ndex_args)
-        logger.info('Uploaded network with ID: %s' % network_id)
+    #for go_ids, ncx in networks.items():
+    #    network_id = format_and_upload_network(ncx, **ndex_args)
+    #    logger.info('Uploaded network with ID: %s' % network_id)
