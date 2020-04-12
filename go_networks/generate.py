@@ -6,6 +6,7 @@ import logging
 import networkx
 import itertools
 import pandas as pd
+from collections import defaultdict
 import ndex2.client
 from indra.util import batch_iter
 from indra.statements import Complex
@@ -28,10 +29,10 @@ INDRA_SIF_PICKLE = '/Users/ben/data/db_dump_df.pkl'
 go_dag = obonet.read_obo(GO_OBO_PATH)
 
 
-def load_goa_gaf():
+def make_genes_by_go_id(path):
     """Load the gene/GO annotations as a pandas data frame."""
-    goa = pd.read_csv(GO_ANNOTS_PATH, sep='\t',
-                      skiprows=23, dtype=str,
+    goa = pd.read_csv(path, sep='\t',
+                      skiprows=31, dtype=str,
                       header=None,
                       names=['DB',
                              'DB_ID',
@@ -50,14 +51,16 @@ def load_goa_gaf():
                              'Assigned',
                              'Annotation_Extension',
                              'Gene_Product_Form_ID'])
-    goa = goa.sort_values(by=['DB_ID', 'GO_ID'])
     # Filter out all "NOT" negative evidences
     goa['Qualifier'].fillna('', inplace=True)
     goa = goa[~goa['Qualifier'].str.startswith('NOT')]
-    return goa
 
-
-goa = load_goa_gaf()
+    genes_by_go_id = defaultdict(set)
+    for idx, (go_id, up_id) in enumerate(zip(goa.GO_ID, goa.DB_ID)):
+        gene_name = uniprot_client.get_gene_name(up_id)
+        if gene_name:
+            genes_by_go_id[go_id].add(gene_name)
+    return genes_by_go_id
 
 
 def load_indra_df(fname):
@@ -89,16 +92,17 @@ def filter_out_medscan(stmts):
     return new_stmts
 
 
-def download_statements(df):
-    """Download the INDRA Statements corresponding to entries in a data frame.
+def download_statements(hashes):
+    """Download the INDRA Statements corresponding to a set of hashes.
     """
-    all_stmts = []
-    for idx, group in enumerate(batch_iter(df.stmt_hash, 500)):
+    stmts_by_hash = {}
+    for idx, group in enumerate(batch_iter(hashes, 500)):
         logger.info('Getting statement batch %d' % idx)
         idbp = indra_db_rest.get_statements_by_hash(list(group),
                                                     ev_limit=10)
-        all_stmts += idbp.statements
-    return all_stmts
+        for stmt in idbp.statements:
+            stmts_by_hash[stmt.get_hash()] = stmt
+    return stmts_by_hash
 
 
 def expand_complex(stmt):
@@ -135,20 +139,12 @@ def assemble_statements(stmts, genes):
     return stmts
 
 
-def get_genes_for_go_id_direct(go_id):
-    df = goa[goa['GO_ID'] == go_id]
-    up_ids = sorted(list(set(df['DB_ID'])))
-    gene_names = [uniprot_client.get_gene_name(up_id) for up_id in up_ids]
-    gene_names = [g for g in gene_names if g]
-    return gene_names
-
-
 def get_genes_for_go_id(go_id):
     """Return genes that are annotated with a given go ID."""
-    gene_names = get_genes_for_go_id_direct(go_id)
+    gene_names = genes_by_go_id[go_id]
     for child_go_id in networkx.ancestors(go_dag, go_id):
-        gene_names += get_genes_for_go_id_direct(child_go_id)
-    gene_names = sorted(set(gene_names))
+        gene_names |= genes_by_go_id[child_go_id]
+    gene_names = sorted(gene_names)
     return gene_names
 
 
@@ -162,8 +158,8 @@ def get_cx_network(stmts, name, network_attributes):
 
 def get_go_ids():
     """Get a list of all GO IDs."""
-    go_ids = [k for k, v in go_dag.items()
-              if v.namespace == 'biological_process']
+    go_ids = [n for n in go_dag.nodes
+              if go_dag.nodes[n]['namespace'] == 'biological_process']
     return go_ids
 
 
@@ -179,9 +175,9 @@ def format_and_upload_network(ncx, **ndex_args):
     return network_id
 
 
-def assemble_network_stmts(go_id):
+def get_statement_hashes(go_id):
     """For a given GO ID, featch and assemble the statements."""
-    go_name = go_dag[go_id].name
+    go_name = go_dag.nodes[go_id]['name']
     metadata = {'go_name': go_name}
     logger.info('Looking at %s (%s)' % (go_id, go_name))
     genes = get_genes_for_go_id(go_id)
@@ -195,7 +191,11 @@ def assemble_network_stmts(go_id):
     if len(df) == 0:
         logger.info('Skipping: no statements found between genes.')
         return None, metadata
-    stmts = download_statements(df)
+    return df.stmt_hash.to_list(), metadata
+
+
+def assemble_network_stmts(go_id, genes):
+    stmts = [stmts_by_hash[h] for h in network_hashes[go_id]]
     metadata['num_all_raw_stmts'] = len(stmts)
     stmts = filter_out_medscan(stmts)
     metadata['num_filtered_raw_stmts'] = len(stmts)
@@ -205,7 +205,7 @@ def assemble_network_stmts(go_id):
 
 
 def make_cx_networks(stmts, go_id):
-    network_name = '%s (%s)' % (go_id, go_dag[go_id].name)
+    network_name = '%s (%s)' % (go_id, go_dag.nodes[go_id]['name'])
     logger.info('===============================')
     network_attributes = {
         'networkType': 'pathway',
@@ -213,7 +213,7 @@ def make_cx_networks(stmts, go_id):
         'GO hierarchy': 'biological process',
         'Prov:wasGeneratedBy': 'INDRA',
         'Organism': 'Homo sapiens (Human)',
-        'Description': go_dag[go_id].name,
+        'Description': go_dag.nodes[go_id]['name'],
         'Methods': 'This network was assembled automatically by INDRA ('
                    'http://indra.bio) by processing all available '
                    'biomedical literature with multiple machine reading '
@@ -235,12 +235,34 @@ if __name__ == '__main__':
     ndex_args = {'server': 'http://public.ndexbio.org',
                  'username': username,
                  'password': password}
+
     indra_df = load_indra_df(INDRA_SIF_PICKLE)
+    genes_by_go_id = make_genes_by_go_id(GO_ANNOTS_PATH)
     go_ids = get_go_ids()
 
-    # Stage 1. Generate networks
-    networks = {}
+    # Stage 1. Get all hashes for each GO ID
     metadata = {}
+    network_hashes = {}
+    for go_id in go_ids:
+        network_hashes[go_id], metadata[go_id] = get_statement_hashes(go_id)
+
+    with open('network_hashes.pkl', 'wb') as fh:
+        pickle.dump(network_hashes, fh)
+
+    with open('metadata.pkl', 'wb') as fh:
+        pickle.dump(metadata, fh)
+
+    all_hashes = set()
+    for hashes in network_hashes.values():
+        if not hashes:
+            continue
+        all_hashes |= set(hashes)
+    all_hashes = list(all_hashes)
+
+    # Stage 2. Download all statements by hash
+    stmts_by_hash = download_statements(all_hashes)
+    # Stage 3. Assemble statements for each GO ID
+    networks = {}
     for go_id in go_ids:
         stmts, md = assemble_network_stmts(go_id)
         if stmts is None:

@@ -6,3 +6,4 @@ def test_get_genes_for_go_id():
     genes_direct = get_genes_for_go_id_direct(go_id)
     genes = get_genes_for_go_id(go_id)
     assert len(genes) > len(genes_direct)
+    assert len(genes) == 523
