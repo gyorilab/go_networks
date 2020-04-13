@@ -1,5 +1,6 @@
 import os
 import copy
+import tqdm
 import pickle
 import obonet
 import logging
@@ -20,6 +21,7 @@ from indra.preassembler.custom_preassembly import agents_stmt_type_matches
 
 
 logger = logging.getLogger('go_networks')
+logging.getLogger('indra.sources.indra_db_rest.util').setLevel(logging.WARNING)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GO_OBO_PATH = os.path.join(HERE, os.pardir, 'go.obo')
@@ -69,16 +71,16 @@ def load_indra_df(fname):
     with open(fname, 'rb') as fh:
         df = pickle.load(fh)
     logger.info('Loaded %d rows from %s' % (len(df), fname))
+    df = df[(df.agA_ns == 'HGNC') & (df.agB_ns == 'HGNC')]
+    logger.info('Filtered to %d rows with genes only' % len(df))
     return df
 
 
-def filter_to_genes(df, genes):
-    """Filter a data frame of INDRA Statements given gene names."""
-    source_filter = ((df.agA_ns == 'HGNC') & (df.agA_name.isin(genes)))
-    target_filter = ((df.agB_ns == 'HGNC') & (df.agB_name.isin(genes)))
-    df_filt = df[source_filter & target_filter]
-    logger.info('Filtered data frame to %d rows.' % len(df_filt))
-    return df_filt
+def get_hashes_by_gene_pair(df):
+    hashes_by_gene_pair = defaultdict(set)
+    for a, b, hs in zip(df.agA_name, df.agB_name, df.stmt_hash):
+        hashes_by_gene_pair[(a, b)].add(hs)
+    return hashes_by_gene_pair
 
 
 def filter_out_medscan(stmts):
@@ -96,8 +98,7 @@ def download_statements(hashes):
     """Download the INDRA Statements corresponding to a set of hashes.
     """
     stmts_by_hash = {}
-    for idx, group in enumerate(batch_iter(hashes, 500)):
-        logger.info('Getting statement batch %d' % idx)
+    for group in tqdm.tqdm(batch_iter(hashes, 1000)):
         idbp = indra_db_rest.get_statements_by_hash(list(group),
                                                     ev_limit=10)
         for stmt in idbp.statements:
@@ -119,23 +120,6 @@ def expand_complex(stmt):
         c = Complex(ordered, evidence=copy.deepcopy(stmt.evidence))
         stmts.append(c)
         added.add(keys)
-    return stmts
-
-
-def assemble_statements(stmts, genes):
-    """Run assembly on statements."""
-    all_stmts = []
-    for stmt in stmts:
-        if isinstance(stmt, Complex):
-            all_stmts += expand_complex(stmt)
-        else:
-            all_stmts.append(stmt)
-    # This is to make sure that expanded complexes don't add nodes that
-    # shouldn't be in the scope of the network
-    all_stmts = ac.filter_gene_list(all_stmts, genes, policy='all')
-    pa = Preassembler(hierarchies, stmts=all_stmts,
-                      matches_fun=agents_stmt_type_matches)
-    stmts = pa.combine_duplicates()
     return stmts
 
 
@@ -176,30 +160,41 @@ def format_and_upload_network(ncx, **ndex_args):
 
 
 def get_statement_hashes(go_id):
-    """For a given GO ID, featch and assemble the statements."""
-    go_name = go_dag.nodes[go_id]['name']
-    metadata = {'go_name': go_name}
-    logger.info('Looking at %s (%s)' % (go_id, go_name))
+    """For a given GO ID, find the statement hashes."""
     genes = get_genes_for_go_id(go_id)
-    logger.info('%d genes for %s' % (len(genes), go_id))
+    logger.debug('%d genes for %s' % (len(genes), go_id))
+
+    metadata = {}
+    hashes = set()
     metadata['num_genes'] = len(genes)
-    if len(genes) < min_gene_count or len(genes) > max_gene_count:
-        logger.info('Skipping: too few or too many genes.')
-        return None, metadata
-    df = filter_to_genes(indra_df, genes)
-    metadata['num_df_rows'] = len(df)
-    if len(df) == 0:
-        logger.info('Skipping: no statements found between genes.')
-        return None, metadata
-    return df.stmt_hash.to_list(), metadata
+    if len(genes) < min_gene_count:
+        metadata['error'] = 'TOO_FEW_GENES'
+    elif len(genes) > max_gene_count:
+        metadata['error'] = 'TOO_MANY_GENES'
+    else:
+        for ga, gb in itertools.product(genes, genes):
+            hashes |= hashes_by_gene_pair.get((ga, gb), set())
+        if not hashes:
+            metadata['error'] = 'NO_STATEMENTS'
+    return hashes, metadata
 
 
-def assemble_network_stmts(go_id, genes):
-    stmts = [stmts_by_hash[h] for h in network_hashes[go_id]]
+def assemble_network_stmts(stmts, genes):
     metadata['num_all_raw_stmts'] = len(stmts)
     stmts = filter_out_medscan(stmts)
     metadata['num_filtered_raw_stmts'] = len(stmts)
-    stmts = assemble_statements(stmts, genes)
+    all_stmts = []
+    for stmt in stmts:
+        if isinstance(stmt, Complex):
+            all_stmts += expand_complex(stmt)
+        else:
+            all_stmts.append(stmt)
+    # This is to make sure that expanded complexes don't add nodes that
+    # shouldn't be in the scope of the network
+    all_stmts = ac.filter_gene_list(all_stmts, genes, policy='all')
+    pa = Preassembler(hierarchies, stmts=all_stmts,
+                      matches_fun=agents_stmt_type_matches)
+    stmts = pa.combine_duplicates()
     metadata['num_assembled_stmts'] = len(stmts)
     return stmts, metadata
 
@@ -237,14 +232,16 @@ if __name__ == '__main__':
                  'password': password}
 
     indra_df = load_indra_df(INDRA_SIF_PICKLE)
+    hashes_by_gene_pair = get_hashes_by_gene_pair(indra_df)
     genes_by_go_id = make_genes_by_go_id(GO_ANNOTS_PATH)
     go_ids = get_go_ids()
 
     # Stage 1. Get all hashes for each GO ID
     metadata = {}
     network_hashes = {}
-    for go_id in go_ids:
+    for go_id in tqdm.tqdm(go_ids):
         network_hashes[go_id], metadata[go_id] = get_statement_hashes(go_id)
+        metadata['go_name'] = go_dag.nodes[go_id]['name']
 
     with open('network_hashes.pkl', 'wb') as fh:
         pickle.dump(network_hashes, fh)
@@ -252,27 +249,29 @@ if __name__ == '__main__':
     with open('metadata.pkl', 'wb') as fh:
         pickle.dump(metadata, fh)
 
-    all_hashes = set()
-    for hashes in network_hashes.values():
-        if not hashes:
-            continue
-        all_hashes |= set(hashes)
-    all_hashes = list(all_hashes)
+    # Stage 2. Download all statements by hah
+    if not os.path.exists('stmts_by_hash.pkl'):
+        all_hashes = set.union(*network_hashes.values())
+        stmts_by_hash = download_statements(all_hashes)
+    else:
+        with open('stmts_by_hash.pkl', 'wb') as fh:
+            stmts_by_hash = pickle.load(fh)
 
-    # Stage 2. Download all statements by hash
-    stmts_by_hash = download_statements(all_hashes)
     # Stage 3. Assemble statements for each GO ID
     networks = {}
     for go_id in go_ids:
-        stmts, md = assemble_network_stmts(go_id)
-        if stmts is None:
-            metadata[go_id] = {'included': False}
+        if metadata[go_id].get('error'):
             continue
-        metadata[go_id] = md
+        stmts = [stmts_by_hash[h] for h in network_hashes[go_id]]
+        stmts, md = assemble_network_stmts(stmts)
+        metadata[go_id].update(md)
+        if stmts is None:
+            metadata[go_id]['error'] = 'NO_ASSEMBLED_STMTS'
+            continue
         ncx = make_cx_networks(stmts, go_id)
         metadata[go_id]['num_ncx_nodes'] = len(ncx.nodes)
         if not ncx.nodes:
-            metadata[go_id]['included'] = False
+            metadata[go_id]['error'] = 'NO_NETWORK_NODES'
             logger.info('Skipping: no nodes in network.')
             continue
         metadata[go_id]['included'] = True
@@ -284,7 +283,7 @@ if __name__ == '__main__':
     with open('metadata.pkl', 'wb') as fh:
         pickle.dump(metadata, fh)
 
-    # Stage 2. Upload networks
+    # Stage 4. Upload networks
     #for go_ids, ncx in networks.items():
     #    network_id = format_and_upload_network(ncx, **ndex_args)
     #    logger.info('Uploaded network with ID: %s' % network_id)
