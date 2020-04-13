@@ -254,7 +254,7 @@ if __name__ == '__main__':
         all_hashes = set.union(*network_hashes.values())
         stmts_by_hash = download_statements(all_hashes)
     else:
-        with open('stmts_by_hash.pkl', 'wb') as fh:
+        with open('stmts_by_hash.pkl', 'rb') as fh:
             stmts_by_hash = pickle.load(fh)
 
     # Stage 3. Assemble statements for each GO ID
@@ -262,10 +262,15 @@ if __name__ == '__main__':
     for go_id in go_ids:
         if metadata[go_id].get('error'):
             continue
-        stmts = [stmts_by_hash[h] for h in network_hashes[go_id]]
-        stmts, md = assemble_network_stmts(stmts)
+        stmts = [stmts_by_hash.get(h) for h in network_hashes[go_id]]
+        stmts = {stmt for stmt in stmts if stmt}
+        metadata[go_id]['new_raw_stmts_obtained'] = len(stmts)
+        if not stmts:
+            metadata[go_id]['error'] = 'NO_RAW_STMTS'
+            continue
+        stmts, md = assemble_network_stmts(stmts, genes_by_go_id[go_id])
         metadata[go_id].update(md)
-        if stmts is None:
+        if not stmts:
             metadata[go_id]['error'] = 'NO_ASSEMBLED_STMTS'
             continue
         ncx = make_cx_networks(stmts, go_id)
