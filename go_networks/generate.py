@@ -16,7 +16,7 @@ import indra.tools.assemble_corpus as ac
 from indra.databases import uniprot_client, ndex_client
 from indra.assemblers.cx import NiceCxAssembler
 from indra.preassembler import Preassembler
-from indra.preassembler.hierarchy_manager import hierarchies
+from indra.ontology.bio import bio_ontology
 from indra.preassembler.custom_preassembly import agents_stmt_type_matches
 
 
@@ -180,6 +180,7 @@ def get_statement_hashes(go_id):
 
 
 def assemble_network_stmts(stmts, genes):
+    metadata = {}
     metadata['num_all_raw_stmts'] = len(stmts)
     stmts = filter_out_medscan(stmts)
     metadata['num_filtered_raw_stmts'] = len(stmts)
@@ -192,7 +193,7 @@ def assemble_network_stmts(stmts, genes):
     # This is to make sure that expanded complexes don't add nodes that
     # shouldn't be in the scope of the network
     all_stmts = ac.filter_gene_list(all_stmts, genes, policy='all')
-    pa = Preassembler(hierarchies, stmts=all_stmts,
+    pa = Preassembler(bio_ontology, stmts=all_stmts,
                       matches_fun=agents_stmt_type_matches)
     stmts = pa.combine_duplicates()
     metadata['num_assembled_stmts'] = len(stmts)
@@ -224,7 +225,7 @@ def make_cx_networks(stmts, go_id):
 if __name__ == '__main__':
     min_gene_count = 5
     max_gene_count = 200
-    network_set_id = '4b7b1e45-b494-11e9-8bb4-0ac135e8bacf'
+    network_set_id = 'd4de51b4-7d95-11ea-aaef-0ac135e8bacf'
     style_network_id = '145a6a47-78ee-11e9-848d-0ac135e8bacf'
     username, password = ndex_client.get_default_ndex_cred(ndex_cred=None)
     ndex_args = {'server': 'http://public.ndexbio.org',
@@ -241,7 +242,7 @@ if __name__ == '__main__':
     network_hashes = {}
     for go_id in tqdm.tqdm(go_ids):
         network_hashes[go_id], metadata[go_id] = get_statement_hashes(go_id)
-        metadata['go_name'] = go_dag.nodes[go_id]['name']
+        metadata[go_id]['go_name'] = go_dag.nodes[go_id]['name']
 
     with open('network_hashes.pkl', 'wb') as fh:
         pickle.dump(network_hashes, fh)
@@ -289,6 +290,6 @@ if __name__ == '__main__':
         pickle.dump(metadata, fh)
 
     # Stage 4. Upload networks
-    #for go_ids, ncx in networks.items():
-    #    network_id = format_and_upload_network(ncx, **ndex_args)
-    #    logger.info('Uploaded network with ID: %s' % network_id)
+    for go_ids, ncx in networks.items():
+        network_id = format_and_upload_network(ncx, **ndex_args)
+        logger.info('Uploaded network with ID: %s' % network_id)
