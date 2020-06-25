@@ -9,6 +9,7 @@ import itertools
 import pandas as pd
 from collections import defaultdict
 import ndex2.client
+from ndex2 import create_nice_cx_from_server
 from indra.util import batch_iter
 from indra.statements import Complex
 from indra.sources import indra_db_rest
@@ -18,7 +19,7 @@ from indra.assemblers.cx import NiceCxAssembler
 from indra.preassembler import Preassembler
 from indra.ontology.bio import bio_ontology
 from indra.preassembler.custom_preassembly import agents_stmt_type_matches
-
+from indra_db.client.principal.curation import get_curations
 
 logger = logging.getLogger('go_networks')
 logging.getLogger('indra.sources.indra_db_rest.util').setLevel(logging.WARNING)
@@ -26,7 +27,7 @@ logging.getLogger('indra.sources.indra_db_rest.util').setLevel(logging.WARNING)
 HERE = os.path.dirname(os.path.abspath(__file__))
 GO_OBO_PATH = os.path.join(HERE, os.pardir, 'go.obo')
 GO_ANNOTS_PATH = os.path.join(HERE, os.pardir, 'goa_human.gaf')
-INDRA_SIF_PICKLE = '/Users/ben/data/db_dump_df.pkl'
+INDRA_SIF_PICKLE = '/Users/ben/data/indradb/2020-05-26/sif.pkl'
 
 go_dag = obonet.read_obo(GO_OBO_PATH)
 
@@ -84,13 +85,17 @@ def get_hashes_by_gene_pair(df):
 
 
 def filter_out_medscan(stmts):
+    logger.info('Filtering out medscan evidence on %d statements' % len(stmts))
     new_stmts = []
     for stmt in stmts:
         new_evidence = [e for e in stmt.evidence if e.source_api != 'medscan']
         if not new_evidence:
             continue
         stmt.evidence = new_evidence
+        if not stmt.evidence:
+            continue
         new_stmts.append(stmt)
+    logger.info('%d statements after filter' % len(new_stmts))
     return new_stmts
 
 
@@ -98,7 +103,7 @@ def download_statements(hashes):
     """Download the INDRA Statements corresponding to a set of hashes.
     """
     stmts_by_hash = {}
-    for group in tqdm.tqdm(batch_iter(hashes, 1000)):
+    for group in tqdm.tqdm(batch_iter(hashes, 1000), total=int(len(hashes)/1000)):
         idbp = indra_db_rest.get_statements_by_hash(list(group),
                                                     ev_limit=10)
         for stmt in idbp.statements:
@@ -132,14 +137,6 @@ def get_genes_for_go_id(go_id):
     return gene_names
 
 
-def get_cx_network(stmts, name, network_attributes):
-    """Return NiceCxNetwork assembled from statements."""
-    ca = NiceCxAssembler(stmts, name)
-    ncx = ca.make_model(self_loops=False,
-                        network_attributes=network_attributes)
-    return ncx
-
-
 def get_go_ids():
     """Get a list of all GO IDs."""
     go_ids = [n for n in go_dag.nodes
@@ -149,7 +146,7 @@ def get_go_ids():
 
 def format_and_upload_network(ncx, **ndex_args):
     """Take a NiceCXNetwork and upload it to NDEx."""
-    ncx.apply_template(uuid=style_network_id, **ndex_args)
+    ncx.apply_style_from_network(style_ncx)
     network_url = ncx.upload_to(**ndex_args)
     network_id = network_url.split('/')[-1]
     nd = ndex2.client.Ndex2(**{(k if k != 'server' else 'host'): v
@@ -196,11 +193,12 @@ def assemble_network_stmts(stmts, genes):
     pa = Preassembler(bio_ontology, stmts=all_stmts,
                       matches_fun=agents_stmt_type_matches)
     stmts = pa.combine_duplicates()
+    stmts = ac.filter_by_curation(stmts, curations=db_curations)
     metadata['num_assembled_stmts'] = len(stmts)
     return stmts, metadata
 
 
-def make_cx_networks(stmts, go_id):
+def make_cx_network(stmts, go_id):
     network_name = '%s (%s)' % (go_id, go_dag.nodes[go_id]['name'])
     logger.info('===============================')
     network_attributes = {
@@ -218,15 +216,21 @@ def make_cx_networks(stmts, go_id):
                    'mechanistic interactions between genes/proteins that '
                    'are associated with this GO process.',
     }
-    ncx = get_cx_network(stmts, network_name, network_attributes)
+    # Assemble CX network
+    ca = NiceCxAssembler(stmts, network_name)
+    ncx = ca.make_model(self_loops=False,
+                        network_attributes=network_attributes)
     return ncx
 
 
 if __name__ == '__main__':
     min_gene_count = 5
     max_gene_count = 200
-    network_set_id = 'd4de51b4-7d95-11ea-aaef-0ac135e8bacf'
-    style_network_id = '145a6a47-78ee-11e9-848d-0ac135e8bacf'
+    network_set_id = 'cba8cce0-b497-11ea-aaef-0ac135e8bacf'
+    #style_network_id = '058c452f-b0d6-11ea-a4d3-0660b7976219'
+    style_ncx = create_nice_cx_from_server(
+        server='http://test.ndexbio.org',
+        uuid='058c452f-b0d6-11ea-a4d3-0660b7976219')
     username, password = ndex_client.get_default_ndex_cred(ndex_cred=None)
     ndex_args = {'server': 'http://public.ndexbio.org',
                  'username': username,
@@ -250,21 +254,26 @@ if __name__ == '__main__':
     with open('metadata.pkl', 'wb') as fh:
         pickle.dump(metadata, fh)
 
-    # Stage 2. Download all statements by hah
+    # Stage 2. Download all statements by hash
     if not os.path.exists('stmts_by_hash.pkl'):
         all_hashes = set.union(*network_hashes.values())
         stmts_by_hash = download_statements(all_hashes)
+        with open('stmts_by_hash.pkl', 'wb') as fh:
+            pickle.dump(stmts_by_hash, fh)
     else:
         with open('stmts_by_hash.pkl', 'rb') as fh:
             stmts_by_hash = pickle.load(fh)
 
     # Stage 3. Assemble statements for each GO ID
+    db_curations = get_curations()
     networks = {}
     for go_id in go_ids:
+        logger.info('Assembling network for %s' % go_id)
         if metadata[go_id].get('error'):
             continue
         stmts = [stmts_by_hash.get(h) for h in network_hashes[go_id]]
         stmts = {stmt for stmt in stmts if stmt}
+        logger.info('Got %d statements by hash' % len(stmts))
         metadata[go_id]['new_raw_stmts_obtained'] = len(stmts)
         if not stmts:
             metadata[go_id]['error'] = 'NO_RAW_STMTS'
@@ -274,7 +283,7 @@ if __name__ == '__main__':
         if not stmts:
             metadata[go_id]['error'] = 'NO_ASSEMBLED_STMTS'
             continue
-        ncx = make_cx_networks(stmts, go_id)
+        ncx = make_cx_network(stmts, go_id)
         metadata[go_id]['num_ncx_nodes'] = len(ncx.nodes)
         if not ncx.nodes:
             metadata[go_id]['error'] = 'NO_NETWORK_NODES'
