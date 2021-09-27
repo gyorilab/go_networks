@@ -27,9 +27,11 @@ logging.getLogger('indra.sources.indra_db_rest.util').setLevel(logging.WARNING)
 HERE = os.path.dirname(os.path.abspath(__file__))
 GO_OBO_PATH = os.path.join(HERE, os.pardir, 'go.obo')
 GO_ANNOTS_PATH = os.path.join(HERE, os.pardir, 'goa_human.gaf')
-INDRA_SIF_PICKLE = '/Users/ben/data/indradb/2020-05-26/sif.pkl'
+INDRA_SIF_PICKLE = '/Users/ben/data/indradb/2021-08-09/sif.pkl'
 
 go_dag = obonet.read_obo(GO_OBO_PATH)
+
+STMTS_BY_HASH_CACHE = {}
 
 
 def make_genes_by_go_id(path):
@@ -102,12 +104,17 @@ def filter_out_medscan(stmts):
 def download_statements(hashes):
     """Download the INDRA Statements corresponding to a set of hashes.
     """
-    stmts_by_hash = {}
-    for group in tqdm.tqdm(batch_iter(hashes, 1000), total=int(len(hashes)/1000)):
-        idbp = indra_db_rest.get_statements_by_hash(list(group),
-                                                    ev_limit=10)
+    stmts_by_hash = {h: STMTS_BY_HASH_CACHE[h] for h in hashes
+                     if h in STMTS_BY_HASH_CACHE}
+    hashes_not_in_cache = {h for h in hashes if h not in STMTS_BY_HASH_CACHE}
+    if not hashes_not_in_cache:
+        return stmts_by_hash
+    for group in tqdm.tqdm(batch_iter(hashes_not_in_cache, 1000),
+                           total=int(len(hashes_not_in_cache)/1000)):
+        idbp = indra_db_rest.get_statements_by_hash(list(group), ev_limit=10)
         for stmt in idbp.statements:
             stmts_by_hash[stmt.get_hash()] = stmt
+            STMTS_BY_HASH_CACHE[stmt.get_hash()] = stmt
     return stmts_by_hash
 
 
@@ -144,7 +151,8 @@ def get_go_ids():
     return go_ids
 
 
-def format_and_upload_network(ncx, **ndex_args):
+def format_and_upload_network(ncx, network_set_id, style_ncx,
+                              **ndex_args):
     """Take a NiceCXNetwork and upload it to NDEx."""
     ncx.apply_style_from_network(style_ncx)
     network_url = ncx.upload_to(**ndex_args)
@@ -226,11 +234,11 @@ def make_cx_network(stmts, go_id):
 if __name__ == '__main__':
     min_gene_count = 5
     max_gene_count = 200
-    network_set_id = 'cba8cce0-b497-11ea-aaef-0ac135e8bacf'
-    #style_network_id = '058c452f-b0d6-11ea-a4d3-0660b7976219'
+    network_set_id = 'd4b51854-0b2b-11ec-b666-0ac135e8bacf'
+    style_network_id = '058c452f-b0d6-11ea-a4d3-0660b7976219'
     style_ncx = create_nice_cx_from_server(
         server='http://test.ndexbio.org',
-        uuid='058c452f-b0d6-11ea-a4d3-0660b7976219')
+        uuid=style_network_id)
     username, password = ndex_client.get_default_ndex_cred(ndex_cred=None)
     ndex_args = {'server': 'http://public.ndexbio.org',
                  'username': username,
@@ -300,5 +308,6 @@ if __name__ == '__main__':
 
     # Stage 4. Upload networks
     for go_ids, ncx in networks.items():
-        network_id = format_and_upload_network(ncx, **ndex_args)
+        network_id = format_and_upload_network(ncx, network_set_id,
+                                               style_ncx, **ndex_args)
         logger.info('Uploaded network with ID: %s' % network_id)
