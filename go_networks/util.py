@@ -7,7 +7,7 @@ import pandas as pd
 from indra.statements import *
 from indra_db.cli.dump import Sif, S3Path, get_latest_dump_s3_path
 
-__all__ = ["load_lastest_sif"]
+__all__ = ["load_lastest_sif", "stmts_by_directedness"]
 
 
 def load_lastest_sif() -> pd.DataFrame:
@@ -53,4 +53,4 @@ def stmts_by_directedness(directed: bool) -> List[str]:
         # Complex
         # Association
         stmt_types = {Complex.__name__, Association.__name__}
-    return sorted(stmt_types)
+    return sorted([s.lower() for s in stmt_types])
