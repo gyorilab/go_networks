@@ -53,4 +53,4 @@ def stmts_by_directedness(directed: bool) -> List[str]:
         # Complex
         # Association
         stmt_types = {Complex.__name__, Association.__name__}
-    return sorted([s.lower() for s in stmt_types])
+    return sorted(stmt_types)
