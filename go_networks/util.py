@@ -49,6 +49,7 @@ def stmts_by_directedness(directed: bool) -> List[str]:
         # Gap: gap-ras
         # RegulateAmount: subj-obj
         stmt_types = {
+            Conversion.__name__,
             Modification.__name__,
             Gef.__name__,
             Gap.__name__,
