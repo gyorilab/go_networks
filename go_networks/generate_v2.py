@@ -7,10 +7,14 @@ from typing import Optional, Dict, List
 
 import pandas as pd
 
-from go_networks.util import load_lastest_sif
+from go_networks.util import load_latest_sif, stmts_by_directedness
 
 # Derived types
 Go2Genes = Dict[str, List[str]]
+
+# statement types by directedness
+DIRECTED_TYPES = stmts_by_directedness(True)
+UNDIRECTED_TYPES = stmts_by_directedness(False)
 
 
 def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
@@ -19,7 +23,7 @@ def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
             sif_df = pickle.load(file=bf)
 
     else:
-        sif_df = load_lastest_sif()
+        sif_df = load_latest_sif()
     assert isinstance(sif_df, pd.DataFrame)
     return sif_df
 

@@ -7,10 +7,10 @@ import pandas as pd
 from indra.statements import *
 from indra_db.cli.dump import Sif, S3Path, get_latest_dump_s3_path
 
-__all__ = ["load_lastest_sif", "stmts_by_directedness"]
+__all__ = ["load_latest_sif", "stmts_by_directedness"]
 
 
-def load_lastest_sif() -> pd.DataFrame:
+def load_latest_sif() -> pd.DataFrame:
     sif_s3p: S3Path = get_latest_dump_s3_path(Sif.name)
     if sif_s3p is None:
         raise ValueError("No sif file found on S3")
