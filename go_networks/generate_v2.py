@@ -7,7 +7,8 @@ from typing import Optional, Dict, List
 
 import pandas as pd
 
-from go_networks.util import load_latest_sif, stmts_by_directedness
+from go_networks.util import load_latest_sif, set_directed, \
+    set_reverse_directed
 
 # Derived types
 Go2Genes = Dict[str, List[str]]
@@ -44,7 +45,13 @@ def generate_props(sif_df: pd.DataFrame):
         - "SOURCE -TARGET": aggregate number of evidences by statement type
           for A-B undirected statements
     """
-    # Add
+    # Set directed/undirected column
+    set_directed(sif_df)
+
+    # Set reverse directed column
+    set_reverse_directed(sif_df)
+
+    # Do group-by statement types and get counts
 
 
 def genes_by_go_id() -> Go2Genes:
