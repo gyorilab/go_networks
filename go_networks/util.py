@@ -11,7 +11,7 @@ __all__ = [
     "load_latest_sif",
     "stmts_by_directedness",
     "set_directed",
-    "set_reverse_directed"
+    "set_reverse_directed",
     "DIRECTED_TYPES",
     "UNDIRECTED_TYPES",
 ]
