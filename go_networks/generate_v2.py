@@ -30,7 +30,7 @@ def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
 
 def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
     """Filter sif dataframe to HGNC pairs only"""
-    return sif.query("agA_ns == HGNC & agB_ns == HGNC")
+    return sif.query("agA_ns == 'HGNC' & agB_ns == 'HGNC'")
 
 
 def generate_props(sif_df: pd.DataFrame):
@@ -48,7 +48,7 @@ def generate_props(sif_df: pd.DataFrame):
         - "SOURCE -TARGET": aggregate number of evidences by statement type
           for A-B undirected statements
     """
-    pass
+    # Add
 
 
 def genes_by_go_id() -> Go2Genes:
