@@ -7,7 +7,14 @@ import pandas as pd
 from indra.statements import *
 from indra_db.cli.dump import Sif, S3Path, get_latest_dump_s3_path
 
-__all__ = ["load_latest_sif", "stmts_by_directedness"]
+__all__ = [
+    "load_latest_sif",
+    "stmts_by_directedness",
+    "set_directed",
+    "set_reverse_directed"
+    "DIRECTED_TYPES",
+    "UNDIRECTED_TYPES",
+]
 
 
 def load_latest_sif() -> pd.DataFrame:
@@ -54,3 +61,66 @@ def stmts_by_directedness(directed: bool) -> List[str]:
         # Association
         stmt_types = {Complex.__name__, Association.__name__}
     return sorted(stmt_types)
+
+
+def set_directed(sif_df: pd.DataFrame):
+    """Extend dataframe with column "directed" indicting directedness
+
+    "directed": true if directed A->B statement exists otherwise false
+
+    Parameters
+    ----------
+    sif_df:
+        The dataframe to manipulate
+    """
+
+    # Extend with "directed" column: check rows that have directed stmt types
+    directed_rows: pd.Series = sif_df.stmt_type.isin(DIRECTED_TYPES)
+    undirected_rows: pd.Series = sif_df.stmt_type.isin(UNDIRECTED_TYPES)
+    assert directed_rows.sum() + undirected_rows.sum() == sif_df.shape[0]
+
+    # Set new column
+    sif_df["directed"] = pd.NA
+
+    # Set directed
+    sif_df.loc[directed_rows, "directed"] = True
+
+    # Set undirected
+    sif_df.loc[undirected_rows, "directed"] = False
+
+    # Check that no rows were left unset
+    assert sif_df.directed.isna().sum() == 0
+
+
+def set_reverse_directed(sif_df: pd.DataFrame):
+    """Set reverse directed property for each pair (A, B)
+
+    "reverse directed": true if directed B->A statement exists otherwise false
+
+    Since each new value per row depends on looking up other rows, it's hard
+    to implement some vectorized version
+
+    Parameters
+    ----------
+    sif_df:
+        DataFrame to set column reverse_directed in
+    """
+    # Set directed column if it doesn't exist
+    if "directed" not in sif_df.columns:
+        set_directed(sif_df)
+
+    sif_df["reverse_directed"] = False
+
+    # Set temporary column AB f'{agA_name}_{agB_name}'
+    sif_df["AB"] = sif_df.agA_name + "_" + sif_df.agB_name
+    # Set temporary column BA f'{agB_name}_{agA_name}'
+    sif_df["BA"] = sif_df.agB_name + "_" + sif_df.agA_name
+
+    # Set column reverse_directed:
+    # sif_df.loc[sif_df.AB.isin(BA),"reverse_directed"] = True
+    sif_df.loc[sif_df.AB.isin(sif_df.BA.values), "reverse_directed"] = True
+
+
+# statement types by directedness
+DIRECTED_TYPES = stmts_by_directedness(True)
+UNDIRECTED_TYPES = stmts_by_directedness(False)
