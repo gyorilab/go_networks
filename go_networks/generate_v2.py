@@ -12,10 +12,6 @@ from go_networks.util import load_latest_sif, stmts_by_directedness
 # Derived types
 Go2Genes = Dict[str, List[str]]
 
-# statement types by directedness
-DIRECTED_TYPES = stmts_by_directedness(True)
-UNDIRECTED_TYPES = stmts_by_directedness(False)
-
 
 def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
     if local_sif and Path(local_sif).is_file():
