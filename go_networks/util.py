@@ -99,7 +99,7 @@ def set_reverse_directed(sif_df: pd.DataFrame):
     "reverse directed": true if directed B->A statement exists otherwise false
 
     Since each new value per row depends on looking up other rows, it's hard
-    to implement some vectorized version
+    to implement some vectorized version, use temporary columns instead.
 
     Parameters
     ----------
@@ -118,8 +118,14 @@ def set_reverse_directed(sif_df: pd.DataFrame):
     sif_df["BA"] = sif_df.agB_name + "_" + sif_df.agA_name
 
     # Set column reverse_directed:
-    # sif_df.loc[sif_df.AB.isin(BA),"reverse_directed"] = True
-    sif_df.loc[sif_df.AB.isin(sif_df.BA.values), "reverse_directed"] = True
+    # "if each AB in BA & is directed"
+    sif_df.loc[
+        (sif_df.AB.isin(sif_df.BA.values) & sif_df.directed), "reverse_directed"
+    ] = True
+    assert (~sif_df.directed & sif_df.reverse_directed).sum() == 0
+
+    # Drop temporary columns
+    sif_df.drop(columns=['AB', 'BA'], inplace=True)
 
 
 # statement types by directedness
