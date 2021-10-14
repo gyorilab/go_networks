@@ -5,6 +5,7 @@ import pickle
 from pathlib import Path
 from typing import Optional, Dict, List
 
+import numpy as np
 import pandas as pd
 
 from go_networks.util import load_latest_sif, set_directed, \
@@ -75,7 +76,7 @@ def build_networks(go2genes_map: Go2Genes, pair_props):
             - Maybe choose the statement involving A and B with the highest
               evidence count / belief score and choose one example sentence
               to add to the edge?
-        - How to generate the edge label (the general pattern is 
+        - How to generate the edge label (the general pattern is
           "A (interaction type) B")?
             - Make these as specific as possible, the least specific being
               "A (interacts with) B"
