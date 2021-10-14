@@ -1,18 +1,27 @@
 """
 Generate GO Networks
 """
+import logging
 import pickle
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, Any, Set
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from go_networks.util import load_latest_sif, set_directed, \
     set_reverse_directed
-
 # Derived types
-Go2Genes = Dict[str, List[str]]
+from indra.databases import uniprot_client
+
+Go2Genes = Dict[str, Set[str]]
+
+# Constants
+GO_PATH = Path(__file__).absolute().parent.joinpath("goa_human.gaf")
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
@@ -88,9 +97,58 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def genes_by_go_id() -> Go2Genes:
-    """For each GO id get the associated genes"""
-    pass
+def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
+    """For each GO id, get the associated genes
+
+    Parameters
+    ----------
+    go_path :
+        If provided, load the go file from here, otherwise assume the file
+        is in the directory of this file with file name goa_human.gaf
+
+    Returns
+    -------
+    :
+        A mapping of GO ids to genes
+    """
+    goa_df = pd.read_csv(
+        go_path,
+        sep="\t",
+        comment="!",
+        dtype=str,
+        header=None,
+        names=[
+            "DB",
+            "DB_ID",
+            "DB_Symbol",
+            "Qualifier",
+            "GO_ID",
+            "DB_Reference",
+            "Evidence_Code",
+            "With_From",
+            "Aspect",
+            "DB_Object_Name",
+            "DB_Object_Synonym",
+            "DB_Object_Type",
+            "Taxon",
+            "Date",
+            "Assigned",
+            "Annotation_Extension",
+            "Gene_Product_Form_ID",
+        ],
+    )
+    # Filter out negative evidence
+    goa_df = goa_df[goa_df.Qualifier.str.startswith("NOT")]
+    goa_df["entity"] = list(zip(goa_df.DB, goa_df.DB_ID, goa_df.DB_Symbol))
+    up_mapping = goa_df.groupby("GO_ID").agg({"DB_ID": lambda x: x.tolist()}).to_dict()
+    logger.info("Translating genes from UP to HGNC")
+    mapping = {}
+    for go_id, gene_list in tqdm(up_mapping.items()):
+        gene_names = {uniprot_client.get_gene_name(up_id) for up_id in gene_list}
+        if gene_names:
+            mapping[go_id] = gene_names
+
+    return mapping
 
 
 def build_networks(go2genes_map: Go2Genes, pair_props):
