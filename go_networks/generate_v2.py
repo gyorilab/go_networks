@@ -43,7 +43,7 @@ def generate_props(sif_df: pd.DataFrame):
           type for A->B statements
         - "TARGET => SOURCE": aggregate number of evidences by statement
           type for B->A statements
-        - "SOURCE -TARGET": aggregate number of evidences by statement type
+        - "SOURCE - TARGET": aggregate number of evidences by statement type
           for A-B undirected statements
     """
     # Set directed/undirected column
@@ -52,7 +52,26 @@ def generate_props(sif_df: pd.DataFrame):
     # Set reverse directed column
     set_reverse_directed(sif_df)
 
-    # Do group-by statement types and get counts
+    # Do group-by on stmt_type and get:
+    #   - A->B aggregated evidence counts
+    #   - B->A aggregated evidence counts
+    #   - A-B (undirected) aggregated evidence counts
+
+    dir_count = (
+        sif_df[sif_df.directed].groupby("stmt_type").aggregate(np.sum).evidence_count
+    )
+    rev_dir_count = (
+        sif_df[sif_df.reverse_directed]
+        .groupby("stmt_type")
+        .aggregate(np.sum)
+        .evidence_count
+    )
+    undir_count = (
+        sif_df[sif_df.directed == False]
+        .groupby("stmt_type")
+        .aggregate(np.sum)
+        .evidence_count
+    )
 
 
 def genes_by_go_id() -> Go2Genes:
