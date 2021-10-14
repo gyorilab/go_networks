@@ -3,7 +3,7 @@ Generate GO Networks
 """
 import pickle
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 
 import numpy as np
 import pandas as pd
@@ -31,7 +31,7 @@ def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
     return sif.query("agA_ns == 'HGNC' & agB_ns == 'HGNC'")
 
 
-def generate_props(sif_df: pd.DataFrame):
+def generate_props(sif_df: pd.DataFrame) -> Dict[str, Any]:
     """Generate properties per pair
 
     For each pair of genes (A,B) (excluding self loops), generate the
@@ -59,19 +59,33 @@ def generate_props(sif_df: pd.DataFrame):
 
     dir_count = (
         sif_df[sif_df.directed].groupby("stmt_type").aggregate(np.sum).evidence_count
-    )
+    ).to_dict()
     rev_dir_count = (
         sif_df[sif_df.reverse_directed]
         .groupby("stmt_type")
         .aggregate(np.sum)
         .evidence_count
-    )
+    ).to_dict()
     undir_count = (
         sif_df[sif_df.directed == False]
         .groupby("stmt_type")
         .aggregate(np.sum)
         .evidence_count
-    )
+    ).to_dict()
+
+    pair_props = {
+        (A, B): {"directed": d, "reverse_directed": r}
+        for A, B, d, r in sif_df[
+            ["agA_name", "agB_name", "directed", "reverse_directed"]
+        ].values
+    }
+
+    return {
+        "dir_count": dir_count,
+        "rev_dir_count": rev_dir_count,
+        "undir_count": undir_count,
+        "pair_props": pair_props,
+    }
 
 
 def genes_by_go_id() -> Go2Genes:
