@@ -125,7 +125,26 @@ def set_reverse_directed(sif_df: pd.DataFrame):
     assert (~sif_df.directed & sif_df.reverse_directed).sum() == 0
 
     # Drop temporary columns
-    sif_df.drop(columns=['AB', 'BA'], inplace=True)
+    sif_df.drop(columns=["AB", "BA"], inplace=True)
+
+
+def set_pair(sif_df: pd.DataFrame):
+    """Set pair column in DataFrame
+
+    The pair is constructed for each unordered pair (A, B) such that all
+    interactions A->B, B->A, A-B can be grouped together
+
+    Parameters
+    ----------
+    sif_df :
+        DataFrame to set column pair in
+    """
+    # Will take ~1 min for the full sif dump
+    def _pair(row) -> str:
+        on = sorted([row.agA_name, row.agB_name])
+        return f"{on[0]}|{on[1]}"
+
+    sif_df["pair"] = sif_df.apply(_pair, axis=1)
 
 
 # statement types by directedness
