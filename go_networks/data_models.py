@@ -22,7 +22,7 @@ class PairProperty(BaseModel):
     a: Entity
     b: Entity
     order: Tuple[str, str]  # The original order of A,B
-    hashes: List[Tuple[str, int]]  # (stmt_type, hash)
+    hashes: Dict[str, List[int]]  # (stmt_type, hash)
     directed: bool  # if directed A->B statement exists
     reverse_directed: bool  # true if directed B->A statements exists
     directed_evidence_count: Dict[str, int]  # ev count per statement type
