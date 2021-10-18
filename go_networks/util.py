@@ -147,8 +147,6 @@ def set_pair(sif_df: pd.DataFrame):
     """
     # Created list of pair that has the same length as number of rows in
     # DataFrame, allowing
-    logger.info("Generating pairs")
-
     pairs = []
     added = set()
     for a_name, b_name in tqdm(
