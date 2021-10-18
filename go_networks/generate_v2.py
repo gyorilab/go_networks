@@ -91,8 +91,10 @@ def get_pair_properties(
     return pair_properties
 
 
-def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
-    """Generate properties per pair
+def generate_props(
+    sif_df: pd.DataFrame, props_file: Optional[str] = None
+) -> Dict[str, PairProperty]:
+    """Generate properties per pair from the Sif dump
 
     For each pair of genes (A,B) (excluding self loops), generate the
     following properties:
@@ -106,6 +108,7 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
         - "SOURCE - TARGET": aggregate number of evidences by statement type
           for A-B undirected statements
     """
+
     def _get_nested_dict(
         tuple_dict: Dict[Tuple[str, str], Union[int, List[int]]]
     ) -> Dict[str, Dict[str, Union[int, List[int]]]]:
@@ -118,97 +121,112 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
                 nested_dict[p][s] = c
         return nested_dict
 
-    # Set pair column
-    logger.info("Setting pair column")
-    set_pair(sif_df)
+    if props_file is not None and Path(props_file).is_file():
+        logger.info(f"Loading property lookup from {props_file}")
+        with Path(props_file).open(mode="rb") as fr:
+            properties = pickle.load(fr)
 
-    # Get name to entity mapping
-    logger.info("Creating name to (ns, id) mapping")
-    ns_id_name_tups = set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
-        set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
-    )
-    pair_entity_mapping = {name: (ns, _id) for ns, _id, name in tqdm(ns_id_name_tups)}
+    else:
+        # Set pair column
+        logger.info("Setting pair column")
+        set_pair(sif_df)
 
-    # Set directed/undirected column
-    logger.info("Setting directed column")
-    set_directed(sif_df)
+        # Get name to entity mapping
+        logger.info("Creating name to (ns, id) mapping")
+        ns_id_name_tups = set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
+            set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
+        )
+        pair_entity_mapping = {
+            name: (ns, _id) for ns, _id, name in tqdm(ns_id_name_tups)
+        }
 
-    # Set reverse directed column
-    logger.info("Setting reverse directed column")
-    set_reverse_directed(sif_df)
+        # Set directed/undirected column
+        logger.info("Setting directed column")
+        set_directed(sif_df)
 
-    # Do group-by on pair and get:
-    #   - if pair has directed stmts
-    #   - if pair has reverse directed stmts
-    #   - A->B aggregated evidence counts, per stmt_type
-    #   - B->A aggregated evidence counts, per stmt_type
-    #   - A-B (undirected) aggregated evidence counts
+        # Set reverse directed column
+        logger.info("Setting reverse directed column")
+        set_reverse_directed(sif_df)
 
-    logger.info("Getting directed, reverse directed dict")
-    dir_dict = (
-        sif_df.groupby("pair")
-        .aggregate({"reverse_directed": any, "directed": any})
-        .to_dict("index")
-    )
+        # Do group-by on pair and get:
+        #   - if pair has directed stmts
+        #   - if pair has reverse directed stmts
+        #   - A->B aggregated evidence counts, per stmt_type
+        #   - B->A aggregated evidence counts, per stmt_type
+        #   - A-B (undirected) aggregated evidence counts
 
-    # Gets a multiindexed series with pair, stmt_type as indices
-    logger.info(
-        "Getting aggregated evidence counts per statement type for "
-        "directed statements"
-    )
-    dir_ev_count_dict: Dict = (
-        sif_df[sif_df.directed]
-        .groupby(["pair", "stmt_type"])
-        .aggregate(np.sum)
-        .evidence_count.to_dict()
-    )
-    dir_ev_count = _get_nested_dict(dir_ev_count_dict)
+        logger.info("Getting directed, reverse directed dict")
+        dir_dict = (
+            sif_df.groupby("pair")
+            .aggregate({"reverse_directed": any, "directed": any})
+            .to_dict("index")
+        )
 
-    logger.info(
-        "Getting aggregated evidence counts per statement type for "
-        "reverse directed statements"
-    )
-    rev_dir_count_dict = (
-        sif_df[sif_df.reverse_directed]
-        .groupby(["pair", "stmt_type"])
-        .aggregate(np.sum)
-        .evidence_count.to_dict()
-    )
-    rev_dir_ev_count = _get_nested_dict(rev_dir_count_dict)
+        # Gets a multiindexed series with pair, stmt_type as indices
+        logger.info(
+            "Getting aggregated evidence counts per statement type for "
+            "directed statements"
+        )
+        dir_ev_count_dict: Dict = (
+            sif_df[sif_df.directed]
+            .groupby(["pair", "stmt_type"])
+            .aggregate(np.sum)
+            .evidence_count.to_dict()
+        )
+        dir_ev_count = _get_nested_dict(dir_ev_count_dict)
 
-    logger.info(
-        "Getting aggregated evidence counts per statement type for "
-        "undirected statements"
-    )
-    undir_count_dict = (
-        sif_df[sif_df.directed == False]
-        .groupby(["pair", "stmt_type"])
-        .aggregate(np.sum)
-        .evidence_count.to_dict()
-    )
-    undir_ev_count = _get_nested_dict(undir_count_dict)
+        logger.info(
+            "Getting aggregated evidence counts per statement type for "
+            "reverse directed statements"
+        )
+        rev_dir_count_dict = (
+            sif_df[sif_df.reverse_directed]
+            .groupby(["pair", "stmt_type"])
+            .aggregate(np.sum)
+            .evidence_count.to_dict()
+        )
+        rev_dir_ev_count = _get_nested_dict(rev_dir_count_dict)
 
-    # List stmt_type hash tuples per pair
-    logger.info("Getting stmt type, hash per pair")
-    hash_type_td = list(
-        sif_df.groupby(["pair", "stmt_type"])
-        .aggregate({"stmt_hash": lambda x: x.tolist()})
-        .to_dict()
-        .values()
-    )[0]
-    hash_type_dict = _get_nested_dict(hash_type_td)
+        logger.info(
+            "Getting aggregated evidence counts per statement type for "
+            "undirected statements"
+        )
+        undir_count_dict = (
+            sif_df[sif_df.directed == False]
+            .groupby(["pair", "stmt_type"])
+            .aggregate(np.sum)
+            .evidence_count.to_dict()
+        )
+        undir_ev_count = _get_nested_dict(undir_count_dict)
 
-    # Make dictionary with (A, B) tuple as key and PairProperty as value -
-    # get values from all the produced dicts
-    logger.info("Assembling all data to lookup by pair")
-    properties = get_pair_properties(
-        dir_dict=dir_dict,
-        dir_ev_count=dir_ev_count,
-        rev_dir_ev_count=rev_dir_ev_count,
-        undir_ev_count=undir_ev_count,
-        type_hash_list=hash_type_dict,
-        pair_entity_dict=pair_entity_mapping,
-    )
+        # List stmt_type hash tuples per pair
+        logger.info("Getting stmt type, hash per pair")
+        hash_type_td = list(
+            sif_df.groupby(["pair", "stmt_type"])
+            .aggregate({"stmt_hash": lambda x: x.tolist()})
+            .to_dict()
+            .values()
+        )[0]
+        hash_type_dict = _get_nested_dict(hash_type_td)
+
+        # Make dictionary with (A, B) tuple as key and PairProperty as value -
+        # get values from all the produced dicts
+        logger.info("Assembling all data to lookup by pair")
+        properties = get_pair_properties(
+            dir_dict=dir_dict,
+            dir_ev_count=dir_ev_count,
+            rev_dir_ev_count=rev_dir_ev_count,
+            undir_ev_count=undir_ev_count,
+            type_hash_list=hash_type_dict,
+            pair_entity_dict=pair_entity_mapping,
+        )
+
+        # Write to file if provided
+        if props_file:
+            logger.info(f"Saving property lookup to {props_file}")
+            Path(props_file).absolute().parent.mkdir(exist_ok=True, parents=True)
+            with Path(props_file).open(mode="wb") as fo:
+                pickle.dump(obj=properties, file=fo)
 
     return properties
 
