@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from go_networks.data_models import PairProperty
+from go_networks.data_models import PairProperty, Entity
 from go_networks.util import (
     load_latest_sif,
     set_directed,
@@ -23,6 +23,7 @@ from indra.databases import uniprot_client
 Go2Genes = Dict[str, Set[str]]
 EvCountDict = Dict[str, Dict[str, int]]
 HashTypeDict = Dict[str, Dict[str, List[int]]]
+PairEntityMap = Dict[str, Dict[str, Tuple[str, str, str]]]
 
 # Constants
 GO_PATH = Path(__file__).absolute().parent.joinpath("goa_human.gaf")
@@ -48,10 +49,43 @@ def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_pair_properties(
-        dir_dict: Dict[str, Dict[str, bool]],
-        dir_ev_count: Dict[str, Dict[str, int]]
+    dir_dict: Dict[str, Dict[str, bool]],
+    dir_ev_count: EvCountDict,
+    rev_dir_ev_count: EvCountDict,
+    undir_ev_count: EvCountDict,
+    type_hash_list: HashTypeDict,
+    pair_entity_dict: PairEntityMap,
 ) -> Dict[str, PairProperty]:
-    pass
+    pair_properties = {}
+    for pair, is_dir in tqdm(dir_dict.items()):
+        # Get properties per pair
+        is_dir = is_dir["directed"]
+        is_rev_dir = is_dir["reverse_directed"]
+        dir_ec = dir_ev_count[pair]
+        r_dir_ec = rev_dir_ev_count[pair]
+        u_dir_ec = undir_ev_count[pair]
+        thd = type_hash_list[pair]
+        a_ns, a_id, a_name = pair_entity_dict[pair]["a"]
+        b_ns, b_id, b_name = pair_entity_dict[pair]["b"]
+
+        # Get and set entity data
+        a = Entity(ns=a_ns, id=a_id, name=a_name)
+        b = Entity(ns=b_ns, id=b_id, name=b_name)
+
+        # Add to output dict
+        pair_properties[pair] = PairProperty(
+            a=a,
+            b=b,
+            order=(a.name, b.name),
+            hashes=thd,
+            directed=is_dir,
+            reverse_directed=is_rev_dir,
+            directed_evidence_count=dir_ec,
+            reverse_directed_evidence_count=r_dir_ec,
+            undirected_evidence_count=u_dir_ec,
+        )
+
+    return pair_properties
 
 
 def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
