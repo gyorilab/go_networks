@@ -86,6 +86,17 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
     logger.info("Setting pair column")
     set_pair(sif_df)
 
+    # Get pair to entity mapping
+    pair_entity_mapping = {
+        p: {
+            'a': (a_ns, a_id, a_name),
+            'b': (b_ns, b_id, b_name),
+        }
+        for p, a_name, a_ns, a_id, b_name, b_ns, b_id in
+        tqdm(zip(sif_df.pair, sif_df.agA_name, sif_df.agA_ns, sif_df.agA_id,
+        sif_df.agB_name, sif_df.agB_ns, sif_df.agB_id))
+    }
+
     # Set directed/undirected column
     logger.info("Setting directed column")
     set_directed(sif_df)
