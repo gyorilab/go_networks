@@ -67,7 +67,7 @@ def get_pair_properties(
         thd = type_hash_list[pair]
 
         # Get name
-        a_name, b_name = pair.split('|')
+        a_name, b_name = pair.split("|")
         a_ns, a_id = pair_entity_dict[a_name]
         b_ns, b_id = pair_entity_dict[b_name]
 
@@ -319,8 +319,17 @@ def build_networks(go2genes_map: Go2Genes, pair_props):
     pass
 
 
-def generate(local_sif: Optional[str] = None):
-    """Generate new GO networks from INDRA statements"""
+def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
+    """Generate new GO networks from INDRA statements
+
+    Parameters
+    ----------
+    local_sif :
+        If provided, load sif dump from this file. Default: load from S3.
+    props_file :
+        If provided, load property lookup from this file. Default: generate
+        from sif dump.
+    """
     # Load the latest INDRA SIF dump
     sif_df = get_sif(local_sif)
 
@@ -328,7 +337,7 @@ def generate(local_sif: Optional[str] = None):
     sif_df = filter_to_hgnc(sif_df)
 
     # Generate properties
-    sif_props = generate_props(sif_df)
+    sif_props = generate_props(sif_df, props_file)
 
     # Make genes by GO ID dict
     go2genes_map = genes_by_go_id()
