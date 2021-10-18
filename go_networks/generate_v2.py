@@ -4,18 +4,25 @@ Generate GO Networks
 import logging
 import pickle
 from pathlib import Path
-from typing import Optional, Dict, Any, Set
+from typing import Optional, Dict, Set, Tuple, List, Union
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from go_networks.util import load_latest_sif, set_directed, \
-    set_reverse_directed
-# Derived types
+from go_networks.data_models import PairProperty
+from go_networks.util import (
+    load_latest_sif,
+    set_directed,
+    set_reverse_directed,
+    set_pair,
+)
 from indra.databases import uniprot_client
 
+# Derived types
 Go2Genes = Dict[str, Set[str]]
+EvCountDict = Dict[str, Dict[str, int]]
+HashTypeDict = Dict[str, Dict[str, List[int]]]
 
 # Constants
 GO_PATH = Path(__file__).absolute().parent.joinpath("goa_human.gaf")
@@ -40,7 +47,14 @@ def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
     return sif.query("agA_ns == 'HGNC' & agB_ns == 'HGNC'")
 
 
-def generate_props(sif_df: pd.DataFrame) -> Dict[str, Any]:
+def get_pair_properties(
+        dir_dict: Dict[str, Dict[str, bool]],
+        dir_ev_count: Dict[str, Dict[str, int]]
+) -> Dict[str, PairProperty]:
+    pass
+
+
+def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
     """Generate properties per pair
 
     For each pair of genes (A,B) (excluding self loops), generate the
@@ -55,46 +69,94 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, Any]:
         - "SOURCE - TARGET": aggregate number of evidences by statement type
           for A-B undirected statements
     """
+
+    def _get_nested_dict(
+        tuple_dict: Dict[Tuple[str, str], Union[int, List[int]]]
+    ) -> Dict[str, Dict[str, Union[int, List[int]]]]:
+        # transform {(a, b): v} to {a: {b: v}}
+        nested_dict = {}
+        for (p, s), c in tqdm(tuple_dict.items()):
+            if p not in nested_dict:
+                nested_dict[p] = {s: c}
+            else:
+                nested_dict[p][s] = c
+        return nested_dict
+
+    # Set pair column
+    logger.info("Setting pair column")
+    set_pair(sif_df)
+
     # Set directed/undirected column
+    logger.info("Setting directed column")
     set_directed(sif_df)
 
     # Set reverse directed column
+    logger.info("Setting reverse directed column")
     set_reverse_directed(sif_df)
 
-    # Do group-by on stmt_type and get:
-    #   - A->B aggregated evidence counts
-    #   - B->A aggregated evidence counts
+    # Do group-by on pair and get:
+    #   - if pair has directed stmts
+    #   - if pair has reverse directed stmts
+    #   - A->B aggregated evidence counts, per stmt_type
+    #   - B->A aggregated evidence counts, per stmt_type
     #   - A-B (undirected) aggregated evidence counts
+    logger.info("Getting directed, reverse directed dict")
+    dir_dict = (
+        sif_df.groupby("pair")
+        .aggregate({"reverse_directed": any, "directed": any})
+        .to_dict("index")
+    )
 
-    dir_count = (
-        sif_df[sif_df.directed].groupby("stmt_type").aggregate(np.sum).evidence_count
-    ).to_dict()
-    rev_dir_count = (
+    # Gets a multiindexed series with pair, stmt_type as indices
+    logger.info(
+        "Getting aggregated evidence counts per statement type for "
+        "directed statements"
+    )
+    dir_ev_count_dict: Dict = (
+        sif_df[sif_df.directed]
+        .groupby(["pair", "stmt_type"])
+        .aggregate(np.sum)
+        .evidence_count.to_dict()
+    )
+    dir_ev_count = _get_nested_dict(dir_ev_count_dict)
+
+    logger.info(
+        "Getting aggregated evidence counts per statement type for "
+        "reverse directed statements"
+    )
+    rev_dir_count_dict = (
         sif_df[sif_df.reverse_directed]
-        .groupby("stmt_type")
+        .groupby(["pair", "stmt_type"])
         .aggregate(np.sum)
-        .evidence_count
-    ).to_dict()
-    undir_count = (
+        .evidence_count.to_dict()
+    )
+    rev_dir_count = _get_nested_dict(rev_dir_count_dict)
+
+    logger.info(
+        "Getting aggregated evidence counts per statement type for "
+        "undirected statements"
+    )
+    undir_count_dict = (
         sif_df[sif_df.directed == False]
-        .groupby("stmt_type")
+        .groupby(["pair", "stmt_type"])
         .aggregate(np.sum)
-        .evidence_count
-    ).to_dict()
+        .evidence_count.to_dict()
+    )
+    undir_ev_count = _get_nested_dict(undir_count_dict)
 
-    pair_props = {
-        (A, B): {"directed": d, "reverse_directed": r}
-        for A, B, d, r in sif_df[
-            ["agA_name", "agB_name", "directed", "reverse_directed"]
-        ].values
-    }
+    # List stmt_type hash tuples per pair
+    logger.info('Getting stmt type, hash per pair')
+    hash_type_td = list(sif_df.groupby(["pair", "stmt_type"]).aggregate(
+        {"stmt_hash": lambda x: x.tolist()}
+    ).to_dict().values())[0]
+    hash_type_dict = _get_nested_dict(hash_type_td)
 
-    return {
-        "dir_count": dir_count,
-        "rev_dir_count": rev_dir_count,
-        "undir_count": undir_count,
-        "pair_props": pair_props,
-    }
+    # Make dictionary with (A, B) tuple as key and PairProperty as value -
+    # get values from all the produced dicts
+    logger.info('Assembling all data to lookup by pair')
+    properties = get_pair_properties()
+
+    return properties
 
 
 def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
