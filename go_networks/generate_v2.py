@@ -79,7 +79,7 @@ def get_pair_properties(
         pair_properties[pair] = PairProperty(
             a=a,
             b=b,
-            order=(a.name, b.name),
+            order=(a.name, b.name),  # Order the pair first appeared in
             hashes=thd,
             directed=is_dir,
             reverse_directed=is_rev_dir,
@@ -106,7 +106,6 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
         - "SOURCE - TARGET": aggregate number of evidences by statement type
           for A-B undirected statements
     """
-
     def _get_nested_dict(
         tuple_dict: Dict[Tuple[str, str], Union[int, List[int]]]
     ) -> Dict[str, Dict[str, Union[int, List[int]]]]:
@@ -144,6 +143,7 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
     #   - A->B aggregated evidence counts, per stmt_type
     #   - B->A aggregated evidence counts, per stmt_type
     #   - A-B (undirected) aggregated evidence counts
+
     logger.info("Getting directed, reverse directed dict")
     dir_dict = (
         sif_df.groupby("pair")
