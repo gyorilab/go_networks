@@ -1,8 +1,10 @@
+import logging
 import pickle
 from typing import List
 
 import boto3
 import pandas as pd
+from tqdm import tqdm
 
 from indra.statements import *
 from indra_db.cli.dump import Sif, S3Path, get_latest_dump_s3_path
@@ -14,8 +16,11 @@ __all__ = [
     "set_reverse_directed",
     "DIRECTED_TYPES",
     "UNDIRECTED_TYPES",
-    "set_pair"
+    "set_pair",
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 def load_latest_sif() -> pd.DataFrame:
@@ -140,12 +145,30 @@ def set_pair(sif_df: pd.DataFrame):
     sif_df :
         DataFrame to set column pair in
     """
-    # Will take ~1 min for the full sif dump
-    def _pair(row) -> str:
-        on = sorted([row.agA_name, row.agB_name])
-        return f"{on[0]}|{on[1]}"
+    # Created list of pair that has the same length as number of rows in
+    # DataFrame, allowing
+    logger.info("Generating pairs")
 
-    sif_df["pair"] = sif_df.apply(_pair, axis=1)
+    pairs = []
+    added = set()
+    for a_name, b_name in tqdm(
+        zip(sif_df.agA_name, sif_df.agB_name), total=sif_df.shape[0]
+    ):
+        pair = f"{a_name}|{b_name}"
+        rev_pair = f"{b_name}|{a_name}"
+
+        # If rev_pair already exists that means (B,A) appeared previously as
+        # (A,B) and we don't need to add pair, as rev_pair will cover the
+        # same group. Otherwise add pair.
+        if rev_pair in added:
+            pairs.append(rev_pair)
+        else:
+            pairs.append(pair)
+            added.add(pair)
+
+    assert len(pairs) == sif_df.shape[0]
+
+    sif_df["pair"] = pairs
 
 
 # statement types by directedness
