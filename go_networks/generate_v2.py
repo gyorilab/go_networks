@@ -61,9 +61,9 @@ def get_pair_properties(
         # Get properties per pair
         is_dir = is_dir_dict["directed"]
         is_rev_dir = is_dir_dict["reverse_directed"]
-        dir_ec = dir_ev_count.get(pair, 0)
-        r_dir_ec = rev_dir_ev_count.get(pair, 0)
-        u_dir_ec = undir_ev_count.get(pair, 0)
+        dir_ec = dir_ev_count.get(pair, {})  # Empty dict = no counts
+        r_dir_ec = rev_dir_ev_count.get(pair, {})  # Empty dict = no counts
+        u_dir_ec = undir_ev_count.get(pair, {})  # Empty dict = no counts
         thd = type_hash_list[pair]
         a_ns, a_id, a_name = pair_entity_dict[pair]["a"]
         b_ns, b_id, b_name = pair_entity_dict[pair]["b"]
