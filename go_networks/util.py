@@ -14,6 +14,7 @@ __all__ = [
     "set_reverse_directed",
     "DIRECTED_TYPES",
     "UNDIRECTED_TYPES",
+    "set_pair"
 ]
 
 
