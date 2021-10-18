@@ -123,12 +123,20 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
     # Get pair to entity mapping
     pair_entity_mapping = {
         p: {
-            'a': (a_ns, a_id, a_name),
-            'b': (b_ns, b_id, b_name),
+            "a": (a_ns, a_id, a_name),
+            "b": (b_ns, b_id, b_name),
         }
-        for p, a_name, a_ns, a_id, b_name, b_ns, b_id in
-        tqdm(zip(sif_df.pair, sif_df.agA_name, sif_df.agA_ns, sif_df.agA_id,
-        sif_df.agB_name, sif_df.agB_ns, sif_df.agB_id))
+        for p, a_name, a_ns, a_id, b_name, b_ns, b_id in tqdm(
+            zip(
+                sif_df.pair,
+                sif_df.agA_name,
+                sif_df.agA_ns,
+                sif_df.agA_id,
+                sif_df.agB_name,
+                sif_df.agB_ns,
+                sif_df.agB_id,
+            )
+        )
     }
 
     # Set directed/undirected column
@@ -190,10 +198,13 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
     undir_ev_count = _get_nested_dict(undir_count_dict)
 
     # List stmt_type hash tuples per pair
-    logger.info('Getting stmt type, hash per pair')
-    hash_type_td = list(sif_df.groupby(["pair", "stmt_type"]).aggregate(
-        {"stmt_hash": lambda x: x.tolist()}
-    ).to_dict().values())[0]
+    logger.info("Getting stmt type, hash per pair")
+    hash_type_td = list(
+        sif_df.groupby(["pair", "stmt_type"])
+        .aggregate({"stmt_hash": lambda x: x.tolist()})
+        .to_dict()
+        .values()
+    )[0]
     hash_type_dict = _get_nested_dict(hash_type_td)
 
     # Make dictionary with (A, B) tuple as key and PairProperty as value -
