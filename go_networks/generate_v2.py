@@ -57,10 +57,10 @@ def get_pair_properties(
     pair_entity_dict: PairEntityMap,
 ) -> Dict[str, PairProperty]:
     pair_properties = {}
-    for pair, is_dir in tqdm(dir_dict.items()):
+    for pair, is_dir_dict in tqdm(dir_dict.items()):
         # Get properties per pair
-        is_dir = is_dir["directed"]
-        is_rev_dir = is_dir["reverse_directed"]
+        is_dir = is_dir_dict["directed"]
+        is_rev_dir = is_dir_dict["reverse_directed"]
         dir_ec = dir_ev_count[pair]
         r_dir_ec = rev_dir_ev_count[pair]
         u_dir_ec = undir_ev_count[pair]
