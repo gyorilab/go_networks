@@ -23,7 +23,7 @@ from indra.databases import uniprot_client
 Go2Genes = Dict[str, Set[str]]
 EvCountDict = Dict[str, Dict[str, int]]
 HashTypeDict = Dict[str, Dict[str, List[int]]]
-PairEntityMap = Dict[str, Dict[str, Tuple[str, str, str]]]
+NameEntityMap = Dict[str, Tuple[str, str]]
 
 # Constants
 GO_PATH = Path(__file__).absolute().parent.joinpath("goa_human.gaf")
@@ -54,7 +54,7 @@ def get_pair_properties(
     rev_dir_ev_count: EvCountDict,
     undir_ev_count: EvCountDict,
     type_hash_list: HashTypeDict,
-    pair_entity_dict: PairEntityMap,
+    pair_entity_dict: NameEntityMap,
 ) -> Dict[str, PairProperty]:
     pair_properties = {}
     for pair, is_dir_dict in tqdm(dir_dict.items()):
@@ -65,10 +65,13 @@ def get_pair_properties(
         r_dir_ec = rev_dir_ev_count.get(pair, {})  # Empty dict = no counts
         u_dir_ec = undir_ev_count.get(pair, {})  # Empty dict = no counts
         thd = type_hash_list[pair]
-        a_ns, a_id, a_name = pair_entity_dict[pair]["a"]
-        b_ns, b_id, b_name = pair_entity_dict[pair]["b"]
 
-        # Get and set entity data
+        # Get name
+        a_name, b_name = pair.split('|')
+        a_ns, a_id = pair_entity_dict[a_name]
+        b_ns, b_id = pair_entity_dict[b_name]
+
+        # Set entity data
         a = Entity(ns=a_ns, id=a_id, name=a_name)
         b = Entity(ns=b_ns, id=b_id, name=b_name)
 
@@ -120,24 +123,12 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
     logger.info("Setting pair column")
     set_pair(sif_df)
 
-    # Get pair to entity mapping
-    pair_entity_mapping = {
-        p: {
-            "a": (a_ns, a_id, a_name),
-            "b": (b_ns, b_id, b_name),
-        }
-        for p, a_name, a_ns, a_id, b_name, b_ns, b_id in tqdm(
-            zip(
-                sif_df.pair,
-                sif_df.agA_name,
-                sif_df.agA_ns,
-                sif_df.agA_id,
-                sif_df.agB_name,
-                sif_df.agB_ns,
-                sif_df.agB_id,
-            )
-        )
-    }
+    # Get name to entity mapping
+    logger.info("Creating name to (ns, id) mapping")
+    ns_id_name_tups = set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
+        set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
+    )
+    pair_entity_mapping = {name: (ns, _id) for ns, _id, name in tqdm(ns_id_name_tups)}
 
     # Set directed/undirected column
     logger.info("Setting directed column")
