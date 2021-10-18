@@ -183,7 +183,7 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
         .aggregate(np.sum)
         .evidence_count.to_dict()
     )
-    rev_dir_count = _get_nested_dict(rev_dir_count_dict)
+    rev_dir_ev_count = _get_nested_dict(rev_dir_count_dict)
 
     logger.info(
         "Getting aggregated evidence counts per statement type for "
@@ -209,8 +209,15 @@ def generate_props(sif_df: pd.DataFrame) -> Dict[str, PairProperty]:
 
     # Make dictionary with (A, B) tuple as key and PairProperty as value -
     # get values from all the produced dicts
-    logger.info('Assembling all data to lookup by pair')
-    properties = get_pair_properties()
+    logger.info("Assembling all data to lookup by pair")
+    properties = get_pair_properties(
+        dir_dict=dir_dict,
+        dir_ev_count=dir_ev_count,
+        rev_dir_ev_count=rev_dir_ev_count,
+        undir_ev_count=undir_ev_count,
+        type_hash_list=hash_type_dict,
+        pair_entity_dict=pair_entity_mapping,
+    )
 
     return properties
 
