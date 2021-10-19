@@ -26,7 +26,7 @@ HashTypeDict = Dict[str, Dict[str, List[int]]]
 NameEntityMap = Dict[str, Tuple[str, str]]
 
 # Constants
-GO_PATH = Path(__file__).absolute().parent.joinpath("goa_human.gaf")
+GO_PATH = Path(__file__).absolute().parent.joinpath("goa_human.gaf").as_posix()
 
 
 logger = logging.getLogger(__name__)
