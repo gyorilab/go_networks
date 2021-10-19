@@ -274,7 +274,9 @@ def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
     # Filter out negative evidence
     goa_df = goa_df[goa_df.Qualifier.str.startswith("NOT")]
     goa_df["entity"] = list(zip(goa_df.DB, goa_df.DB_ID, goa_df.DB_Symbol))
-    up_mapping = goa_df.groupby("GO_ID").agg({"DB_ID": lambda x: x.tolist()}).to_dict()
+    up_mapping = dict(*(
+        goa_df.groupby("GO_ID").agg({"DB_ID": lambda x: x.tolist()}).to_dict()
+    ).values())
     logger.info("Translating genes from UP to HGNC")
     mapping = {}
     for go_id, gene_list in tqdm(up_mapping.items()):
