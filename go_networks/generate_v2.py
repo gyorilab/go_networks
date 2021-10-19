@@ -245,7 +245,7 @@ def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
     :
         A mapping of GO ids to genes
     """
-    goa_df = pd.read_csv(
+    goa_df: pd.DataFrame = pd.read_csv(
         go_path,
         sep="\t",
         comment="!",
