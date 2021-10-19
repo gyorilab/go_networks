@@ -279,7 +279,7 @@ def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
     ).values())
     logger.info("Translating genes from UP to HGNC")
     mapping = {}
-    for go_id, gene_list in tqdm(up_mapping.items()):
+    for go_id, gene_list in tqdm(up_mapping.items(), total=len(up_mapping)):
         gene_names = set()
         for up_id in gene_list:
             gene_name = uniprot_client.get_gene_name(up_id)
