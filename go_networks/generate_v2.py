@@ -54,7 +54,7 @@ def get_pair_properties(
     rev_dir_ev_count: EvCountDict,
     undir_ev_count: EvCountDict,
     type_hash_list: HashTypeDict,
-    pair_entity_dict: NameEntityMap,
+    entity_dict: NameEntityMap,
 ) -> Dict[str, PairProperty]:
     pair_properties = {}
     for pair, is_dir_dict in tqdm(dir_dict.items()):
@@ -68,8 +68,8 @@ def get_pair_properties(
 
         # Get name
         a_name, b_name = pair.split("|")
-        a_ns, a_id = pair_entity_dict[a_name]
-        b_ns, b_id = pair_entity_dict[b_name]
+        a_ns, a_id = entity_dict[a_name]
+        b_ns, b_id = entity_dict[b_name]
 
         # Set entity data
         a = Entity(ns=a_ns, id=a_id, name=a_name)
@@ -136,7 +136,7 @@ def generate_props(
         ns_id_name_tups = set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
             set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
         )
-        pair_entity_mapping = {
+        entity_mapping = {
             name: (ns, _id) for ns, _id, name in tqdm(ns_id_name_tups)
         }
 
@@ -218,7 +218,7 @@ def generate_props(
             rev_dir_ev_count=rev_dir_ev_count,
             undir_ev_count=undir_ev_count,
             type_hash_list=hash_type_dict,
-            pair_entity_dict=pair_entity_mapping,
+            entity_dict=entity_mapping,
         )
 
         # Write to file if provided
