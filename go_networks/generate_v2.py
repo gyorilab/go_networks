@@ -3,9 +3,11 @@ Generate GO Networks
 """
 import logging
 import pickle
+import obonet
 from pathlib import Path
 from typing import Optional, Dict, Set, Tuple, List, Union
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -17,6 +19,7 @@ from go_networks.util import (
     set_reverse_directed,
     set_pair,
 )
+from go_networks.network_assembly import GoNetworkAssembler
 from indra.databases import uniprot_client
 
 # Derived types
@@ -26,8 +29,9 @@ HashTypeDict = Dict[str, Dict[str, List[int]]]
 NameEntityMap = Dict[str, Tuple[str, str]]
 
 # Constants
-GO_PATH = Path(__file__).absolute().parent.joinpath("goa_human.gaf").as_posix()
-
+HERE = Path(__file__).absolute().parent
+GO_PATH = HERE.joinpath("goa_human.gaf").as_posix()
+GO_OBO_PATH = HERE.joinpath("go.obo").as_posix()
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +233,7 @@ def generate_props(
     return properties
 
 
-def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
+def genes_by_go_id(go_path: str = GO_PATH, go_obo_path: str = GO_OBO_PATH) -> Go2Genes:
     """For each GO id, get the associated genes
 
     Parameters
@@ -237,12 +241,16 @@ def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
     go_path :
         If provided, load the go file from here, otherwise assume the file
         is in the directory of this file with file name goa_human.gaf
+    go_obo_path :
+        If provided, load the go obo file from here, otherwise assume the
+        file is in the directory of this file with file name go.obo
 
     Returns
     -------
     :
         A mapping of GO ids to genes
     """
+    logger.info(f"Reading GO annotations file from {go_path}")
     goa_df: pd.DataFrame = pd.read_csv(
         go_path,
         sep="\t",
@@ -269,6 +277,11 @@ def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
             "Gene_Product_Form_ID",
         ],
     )
+
+    # Get go dag
+    logger.info(f"Reading GO OBO file from {go_obo_path}")
+    go_dag = obonet.read_obo(go_obo_path)
+
     # Filter out negative evidence
     goa_df = goa_df[goa_df.Qualifier.str.startswith("NOT")]
     goa_df["entity"] = list(zip(goa_df.DB, goa_df.DB_ID, goa_df.DB_Symbol))
@@ -287,6 +300,11 @@ def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
                 gene_names.add(gene_name)
         if gene_names:
             mapping[go_id] = gene_names
+
+    logger.info("Extending go to gene mapping with child ids")
+    for go_id, gene_set in tqdm(mapping.items(), total=len(mapping)):
+        for child_go_id in nx.ancestors(go_dag, go_id):
+            gene_set.update(mapping[child_go_id])
 
     return mapping
 
