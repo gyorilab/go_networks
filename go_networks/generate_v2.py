@@ -136,9 +136,7 @@ def generate_props(
         ns_id_name_tups = set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
             set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
         )
-        entity_mapping = {
-            name: (ns, _id) for ns, _id, name in tqdm(ns_id_name_tups)
-        }
+        entity_mapping = {name: (ns, _id) for ns, _id, name in tqdm(ns_id_name_tups)}
 
         # Set directed/undirected column
         logger.info("Setting directed column")
@@ -274,9 +272,11 @@ def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
     # Filter out negative evidence
     goa_df = goa_df[goa_df.Qualifier.str.startswith("NOT")]
     goa_df["entity"] = list(zip(goa_df.DB, goa_df.DB_ID, goa_df.DB_Symbol))
-    up_mapping = dict(*(
-        goa_df.groupby("GO_ID").agg({"DB_ID": lambda x: x.tolist()}).to_dict()
-    ).values())
+    up_mapping = dict(
+        *(
+            goa_df.groupby("GO_ID").agg({"DB_ID": lambda x: x.tolist()}).to_dict()
+        ).values()
+    )
     logger.info("Translating genes from UP to HGNC")
     mapping = {}
     for go_id, gene_list in tqdm(up_mapping.items(), total=len(up_mapping)):
@@ -291,8 +291,8 @@ def genes_by_go_id(go_path: str = GO_PATH) -> Go2Genes:
     return mapping
 
 
-def build_networks(go2genes_map: Go2Genes, pair_props):
-    """Build networks per gene
+def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str, PairProperty]):
+    """Build networks per go-id associated genes
 
     Iterate by GO ID and for each list of genes, build a network:
         - Make a node for each gene with metadata representing db_refs
