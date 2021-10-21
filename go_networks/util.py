@@ -1,12 +1,15 @@
 import logging
 import pickle
-from typing import List
+from typing import List, Set, Dict
 
 import boto3
 import pandas as pd
 from tqdm import tqdm
 
+from indra.sources import indra_db_rest
+from indra.sources.indra_db_rest import DBQueryStatementProcessor
 from indra.statements import *
+from indra.util import batch_iter
 from indra_db.cli.dump import Sif, S3Path, get_latest_dump_s3_path
 
 __all__ = [
@@ -33,6 +36,17 @@ def load_latest_sif() -> pd.DataFrame:
     sif_df = pickle.loads(fileio["Body"].read())
     assert isinstance(sif_df, pd.DataFrame)
     return sif_df
+
+
+def download_statements(hashes: Set[int]) -> Dict[int, Statement]:
+    stmts_by_hash = {}
+    for hash_iter in tqdm(batch_iter(hashes, batch_size=1000),
+                          total=len(hashes)//1000 + 1):
+        idbp: DBQueryStatementProcessor = \
+            indra_db_rest.get_statements_by_hash(list(hash_iter), ev_limit=10)
+        for stmt in idbp.statements:
+            stmts_by_hash[stmt.get_hash()] = stmt
+    return stmts_by_hash
 
 
 def stmts_by_directedness(directed: bool) -> List[str]:
