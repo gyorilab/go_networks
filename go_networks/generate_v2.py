@@ -10,6 +10,7 @@ from typing import Optional, Dict, Set, Tuple, List, Union
 import networkx as nx
 import numpy as np
 import pandas as pd
+from networkx import MultiDiGraph
 from tqdm import tqdm
 
 from go_networks.data_models import PairProperty, Entity, StmtsByDirectness
