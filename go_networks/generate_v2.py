@@ -233,7 +233,9 @@ def generate_props(
     return properties
 
 
-def genes_by_go_id(go_path: str = GO_PATH, go_obo_path: str = GO_OBO_PATH) -> Go2Genes:
+def genes_by_go_id(
+    go_path: str = GO_PATH, go_obo_dag: Optional[MultiDiGraph] = None
+) -> Go2Genes:
     """For each GO id, get the associated genes
 
     Parameters
@@ -241,9 +243,9 @@ def genes_by_go_id(go_path: str = GO_PATH, go_obo_path: str = GO_OBO_PATH) -> Go
     go_path :
         If provided, load the go file from here, otherwise assume the file
         is in the directory of this file with file name goa_human.gaf
-    go_obo_path :
-        If provided, load the go obo file from here, otherwise assume the
-        file is in the directory of this file with file name go.obo
+    go_obo_dag :
+        If provided, the dag representing the GO ontology hierarchy. If not
+        provided, load it from its default
 
     Returns
     -------
@@ -279,8 +281,11 @@ def genes_by_go_id(go_path: str = GO_PATH, go_obo_path: str = GO_OBO_PATH) -> Go
     )
 
     # Get go dag
-    logger.info(f"Reading GO OBO file from {go_obo_path}")
-    go_dag = obonet.read_obo(go_obo_path)
+    if go_obo_dag is None:
+        logger.info(f"Reading GO OBO file from {GO_OBO_PATH}")
+        go_dag = obonet.read_obo(GO_OBO_PATH)
+    else:
+        go_dag = go_obo_dag
 
     # Filter out negative evidence
     goa_df = goa_df[goa_df.Qualifier.str.startswith("NOT")]
