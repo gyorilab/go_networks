@@ -20,6 +20,13 @@ class Entity(BaseModel):
     name: NonEmptyStr
 
 
+class StmtsByDirectness(BaseModel):
+    """Group statements based on of they are directed or not"""
+
+    directed: Dict[int, Statement]
+    undirected: Dict[int, List[Statement]]
+
+
 class PairProperty(BaseModel):
     """Data model for each pair (A, B) in the sif dump"""
 
