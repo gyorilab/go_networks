@@ -1,5 +1,6 @@
 import logging
 import pickle
+from collections import defaultdict
 from copy import deepcopy
 from itertools import combinations
 from typing import List, Set, Dict
@@ -8,6 +9,7 @@ import boto3
 import pandas as pd
 from tqdm import tqdm
 
+from go_networks.data_models import StmtsByDirectness
 from indra.sources import indra_db_rest
 from indra.sources.indra_db_rest import DBQueryStatementProcessor
 from indra.statements import *
@@ -92,6 +94,34 @@ def expand_complex(complex_stmt: Complex) -> List[Complex]:
         stmts.append(c)
         added.add(keys)
     return stmts
+
+
+def get_stmts(sif_df: pd.DataFrame) -> Dict[str, StmtsByDirectness]:
+    hashes_by_pair: Dict[str, List[int]] = list(
+        sif_df.groupby("pair")
+        .aggregate({"stmt_hash": lambda x: x.tolist()})
+        .to_dict()
+        .values()
+    )[0]
+
+    hashes = set(sif_df.stmt_hash)
+
+    # Download statements
+    stmt_by_hash = download_statements(hashes)
+
+    # Combine statements with pairs, expand Complexes
+    stmts_by_pair = {}
+    for pair, hash_list in tqdm(hashes_by_pair.items()):
+        stmt_by_dir = StmtsByDirectness(directed={}, undirected=defaultdict(list))
+        for h, st in zip(hash_list, (stmt_by_hash[h] for h in hash_list)):
+            if isinstance(st, Complex):
+                cplx_stmts = expand_complex(st)
+                stmt_by_dir.undirected[h].extend(cplx_stmts)
+            else:
+                stmt_by_dir.directed[h] = st
+        if stmt_by_dir.has_data():
+            stmts_by_pair[pair] = stmt_by_dir
+    return stmts_by_pair
 
 
 def stmts_by_directedness(directed: bool) -> List[str]:
