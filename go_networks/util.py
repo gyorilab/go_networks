@@ -122,8 +122,7 @@ def stmts_by_directedness(directed: bool) -> List[str]:
         stmt_types.update(s.__name__ for s in get_all_descendants(RegulateAmount))
     else:
         # Complex
-        # Association
-        stmt_types = {Complex.__name__, Association.__name__}
+        stmt_types = {Complex.__name__}
     return sorted(stmt_types)
 
 
