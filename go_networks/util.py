@@ -24,11 +24,13 @@ __all__ = [
     "DIRECTED_TYPES",
     "UNDIRECTED_TYPES",
     "set_pair",
-    "get_stmts"
+    "get_stmts",
 ]
 
 
 logger = logging.getLogger(__name__)
+
+STMT_CACHE: Dict[int, Statement] = {}
 
 
 def load_latest_sif() -> pd.DataFrame:
@@ -98,6 +100,7 @@ def expand_complex(complex_stmt: Complex) -> List[Complex]:
 
 
 def get_stmts(sif_df: pd.DataFrame) -> Dict[str, StmtsByDirectness]:
+    # Get hashes by pair
     hashes_by_pair: Dict[str, List[int]] = list(
         sif_df.groupby("pair")
         .aggregate({"stmt_hash": lambda x: x.tolist()})
@@ -107,8 +110,19 @@ def get_stmts(sif_df: pd.DataFrame) -> Dict[str, StmtsByDirectness]:
 
     hashes = set(sif_df.stmt_hash)
 
-    # Download statements
-    stmt_by_hash = download_statements(hashes)
+    # Get current stmts - check global first
+    stmt_by_hash = {h: st for h, st in STMT_CACHE.items() if h in hashes}
+    missing_hashes = hashes.difference(set(STMT_CACHE))
+
+    if missing_hashes:
+        # Download missing statements
+        new_stmts_by_hash = download_statements(missing_hashes)
+
+        # Merge dicts
+        stmt_by_hash.update(new_stmts_by_hash)
+
+        # Update global
+        STMT_CACHE.update(stmt_by_hash)
 
     # Combine statements with pairs, expand Complexes
     stmts_by_pair = {}
