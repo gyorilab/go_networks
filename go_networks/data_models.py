@@ -5,6 +5,10 @@ from typing import List, Dict, Tuple
 
 from pydantic import BaseModel, constr
 
+from indra.statements import Statement
+
+
+# Derived types
 NonEmptyStr = constr(strip_whitespace=True, min_length=1)
 
 
@@ -21,10 +25,13 @@ class PairProperty(BaseModel):
 
     a: Entity
     b: Entity
-    order: Tuple[str, str]  # The original order of A,B
-    hashes: Dict[str, List[int]]  # (stmt_type, hash)
+    statements: Dict[int, List[Statement]]
     directed: bool  # if directed A->B statement exists
     reverse_directed: bool  # true if directed B->A statements exists
     directed_evidence_count: Dict[str, int]  # ev count per statement type
     reverse_directed_evidence_count: Dict[str, int]  # ev count per statement type
     undirected_evidence_count: Dict[str, int]  # ev count per statement type
+
+    def get_rev_pair(self) -> Tuple[str, str]:
+        """Get the reverse pair"""
+        return self.b.name, self.a.name
