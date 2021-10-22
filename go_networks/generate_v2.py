@@ -18,6 +18,7 @@ from go_networks.util import (
     set_directed,
     set_reverse_directed,
     set_pair,
+    get_stmts,
 )
 from go_networks.network_assembly import GoNetworkAssembler
 from indra.databases import uniprot_client
@@ -199,15 +200,9 @@ def generate_props(
         )
         undir_ev_count = _get_nested_dict(undir_count_dict)
 
-        # List stmt_type hash tuples per pair
+        # Get hashes per pair
         logger.info("Getting stmt type, hash per pair")
-        hash_type_td = list(
-            sif_df.groupby(["pair", "stmt_type"])
-            .aggregate({"stmt_hash": lambda x: x.tolist()})
-            .to_dict()
-            .values()
-        )[0]
-        hash_type_dict = _get_nested_dict(hash_type_td)
+        stmts_by_pair = get_stmts(sif_df)
 
         # Make dictionary with (A, B) tuple as key and PairProperty as value -
         # get values from all the produced dicts
@@ -217,7 +212,7 @@ def generate_props(
             dir_ev_count=dir_ev_count,
             rev_dir_ev_count=rev_dir_ev_count,
             undir_ev_count=undir_ev_count,
-            type_hash_list=hash_type_dict,
+            stmts_by_pair=stmts_by_pair,
             entity_dict=entity_mapping,
         )
 
