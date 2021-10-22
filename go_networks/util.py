@@ -55,10 +55,12 @@ def download_statements(hashes: Set[int]) -> Dict[int, Statement]:
     """
     stmts_by_hash = {}
     logger.info(f"Downloading {len(hashes)} statements")
-    for hash_iter in tqdm(batch_iter(hashes, batch_size=1000),
-                          total=len(hashes)//1000 + 1):
-        idbp: DBQueryStatementProcessor = \
-            indra_db_rest.get_statements_by_hash(list(hash_iter), ev_limit=10)
+    for hash_iter in tqdm(
+        batch_iter(hashes, batch_size=1000), total=len(hashes) // 1000 + 1
+    ):
+        idbp: DBQueryStatementProcessor = indra_db_rest.get_statements_by_hash(
+            list(hash_iter), ev_limit=10
+        )
         for stmt in idbp.statements:
             stmts_by_hash[stmt.get_hash()] = stmt
     return stmts_by_hash
@@ -201,8 +203,7 @@ def set_pair(sif_df: pd.DataFrame):
     sif_df :
         DataFrame to set column pair in
     """
-    sif_df['pair'] = sif_df.apply(lambda r: f'{r.agA_name}|{r.agb_name}',
-                                  axis=1)
+    sif_df["pair"] = sif_df.apply(lambda r: f"{r.agA_name}|{r.agb_name}", axis=1)
 
 
 # statement types by directedness
