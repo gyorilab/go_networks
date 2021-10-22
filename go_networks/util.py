@@ -151,36 +151,16 @@ def set_reverse_directed(sif_df: pd.DataFrame):
 def set_pair(sif_df: pd.DataFrame):
     """Set pair column in DataFrame
 
-    The pair is constructed for each unordered pair (A, B) such that all
-    interactions A->B, B->A, A-B can be grouped together
+    The pair is constructed for each ordered pair (A, B) such that all
+    interactions, directed or undirected, can be grouped together
 
     Parameters
     ----------
     sif_df :
         DataFrame to set column pair in
     """
-    # Created list of pair that has the same length as number of rows in
-    # DataFrame, allowing
-    pairs = []
-    added = set()
-    for a_name, b_name in tqdm(
-        zip(sif_df.agA_name, sif_df.agB_name), total=sif_df.shape[0]
-    ):
-        pair = f"{a_name}|{b_name}"
-        rev_pair = f"{b_name}|{a_name}"
-
-        # If rev_pair already exists that means (B,A) appeared previously as
-        # (A,B) and we don't need to add pair, as rev_pair will cover the
-        # same group. Otherwise add pair.
-        if rev_pair in added:
-            pairs.append(rev_pair)
-        else:
-            pairs.append(pair)
-            added.add(pair)
-
-    assert len(pairs) == sif_df.shape[0]
-
-    sif_df["pair"] = pairs
+    sif_df['pair'] = sif_df.apply(lambda r: f'{r.agA_name}|{r.agb_name}',
+                                  axis=1)
 
 
 # statement types by directedness
