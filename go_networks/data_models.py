@@ -26,6 +26,10 @@ class StmtsByDirectness(BaseModel):
     directed: Dict[int, Statement]
     undirected: Dict[int, List[Statement]]
 
+    def is_empty(self):
+        """Shortcut to check if model contains any data"""
+        return len(self.directed) == 0 and len(self.undirected) == 0
+
 
 class PairProperty(BaseModel):
     """Data model for each pair (A, B) in the sif dump"""
