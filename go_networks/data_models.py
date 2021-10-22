@@ -36,7 +36,7 @@ class PairProperty(BaseModel):
 
     a: Entity
     b: Entity
-    statements: Dict[int, List[Statement]]
+    statements: StmtsByDirectness
     directed: bool  # if directed A->B statement exists
     reverse_directed: bool  # true if directed B->A statements exists
     directed_evidence_count: Dict[str, int]  # ev count per statement type
