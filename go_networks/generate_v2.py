@@ -359,7 +359,8 @@ def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
     sif_props = generate_props(sif_df, props_file)
 
     # Make genes by GO ID dict
-    go2genes_map = genes_by_go_id()
+    go_dag = obonet.read_obo(GO_OBO_PATH)
+    go2genes_map = genes_by_go_id(go_path=GO_PATH, go_obo_dag=go_dag)
 
     # Iterate by GO ID and for each list of genes, build a network
     build_networks(go2genes_map, sif_props)
