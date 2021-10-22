@@ -39,7 +39,20 @@ def load_latest_sif() -> pd.DataFrame:
 
 
 def download_statements(hashes: Set[int]) -> Dict[int, Statement]:
+    """Get statements from a set of hashes
+
+    Parameters
+    ----------
+    hashes :
+        The set of hashes for the statements to download
+
+    Returns
+    -------
+    :
+        A dictionary mapping hash to statement
+    """
     stmts_by_hash = {}
+    logger.info(f"Downloading {len(hashes)} statements")
     for hash_iter in tqdm(batch_iter(hashes, batch_size=1000),
                           total=len(hashes)//1000 + 1):
         idbp: DBQueryStatementProcessor = \
