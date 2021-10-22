@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from go_networks.data_models import PairProperty, Entity
+from go_networks.data_models import PairProperty, Entity, StmtsByDirectness
 from go_networks.util import (
     load_latest_sif,
     set_directed,
@@ -57,18 +57,17 @@ def get_pair_properties(
     dir_ev_count: EvCountDict,
     rev_dir_ev_count: EvCountDict,
     undir_ev_count: EvCountDict,
-    type_hash_list: HashTypeDict,
+    stmts_by_pair: Dict[str, StmtsByDirectness],
     entity_dict: NameEntityMap,
 ) -> Dict[str, PairProperty]:
     pair_properties = {}
-    for pair, is_dir_dict in tqdm(dir_dict.items()):
+    for pair, stmts_by_dir in stmts_by_pair.items():
         # Get properties per pair
-        is_dir = is_dir_dict["directed"]
-        is_rev_dir = is_dir_dict["reverse_directed"]
+        is_dir = dir_dict[pair]["directed"]
+        is_rev_dir = dir_dict[pair]["reverse_directed"]
         dir_ec = dir_ev_count.get(pair, {})  # Empty dict = no counts
         r_dir_ec = rev_dir_ev_count.get(pair, {})  # Empty dict = no counts
         u_dir_ec = undir_ev_count.get(pair, {})  # Empty dict = no counts
-        thd = type_hash_list[pair]
 
         # Get name
         a_name, b_name = pair.split("|")
@@ -83,8 +82,7 @@ def get_pair_properties(
         pair_properties[pair] = PairProperty(
             a=a,
             b=b,
-            order=(a.name, b.name),  # Order the pair first appeared in
-            hashes=thd,
+            statements=stmts_by_dir,
             directed=is_dir,
             reverse_directed=is_rev_dir,
             directed_evidence_count=dir_ec,
