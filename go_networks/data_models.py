@@ -26,9 +26,9 @@ class StmtsByDirectness(BaseModel):
     directed: Dict[int, Statement]
     undirected: Dict[int, List[Statement]]
 
-    def is_empty(self):
+    def has_data(self):
         """Shortcut to check if model contains any data"""
-        return len(self.directed) == 0 and len(self.undirected) == 0
+        return len(self.undirected) > 0 or len(self.directed) > 0
 
 
 class PairProperty(BaseModel):
