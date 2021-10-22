@@ -1,5 +1,7 @@
 import logging
 import pickle
+from copy import deepcopy
+from itertools import combinations
 from typing import List, Set, Dict
 
 import boto3
@@ -60,6 +62,34 @@ def download_statements(hashes: Set[int]) -> Dict[int, Statement]:
         for stmt in idbp.statements:
             stmts_by_hash[stmt.get_hash()] = stmt
     return stmts_by_hash
+
+
+def expand_complex(complex_stmt: Complex) -> List[Complex]:
+    """Replace a Complex statement with a list of binary Complex statements
+
+    Parameters
+    ----------
+    complex_stmt :
+        A Complex statement to expand out to a list of statements
+
+    Returns
+    -------
+    :
+        A list of complexes with only two memebers
+    """
+    stmts = []
+    added = set()
+    for m1, m2 in combinations(complex_stmt.members, 2):
+        keys = (m1.entity_matches_key(), m2.entity_matches_key())
+        if keys in added:
+            continue
+        if len(set(keys)) == 1:
+            continue
+        ordered = sorted([m1, m2], key=lambda x: x.entity_matches_key())
+        c = Complex(ordered, evidence=deepcopy(complex_stmt.evidence))
+        stmts.append(c)
+        added.add(keys)
+    return stmts
 
 
 def stmts_by_directedness(directed: bool) -> List[str]:
