@@ -4,6 +4,7 @@ Generate GO Networks
 import logging
 import pickle
 import obonet
+from itertools import product
 from pathlib import Path
 from typing import Optional, Dict, Set, Tuple, List, Union
 
@@ -27,7 +28,6 @@ from indra.databases import uniprot_client
 # Derived types
 Go2Genes = Dict[str, Set[str]]
 EvCountDict = Dict[str, Dict[str, int]]
-HashTypeDict = Dict[str, Dict[str, List[int]]]
 NameEntityMap = Dict[str, Tuple[str, str]]
 
 # Constants
@@ -308,34 +308,52 @@ def genes_by_go_id(
     return mapping
 
 
-def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str, PairProperty]):
+def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str, PairProperty], go_dag):
     """Build networks per go-id associated genes
 
-    Iterate by GO ID and for each list of genes, build a network:
-        - Make a node for each gene with metadata representing db_refs
-        - Add all the edges between the list of genes with metadata coming
-          from the pre-calculated data in (4), i.e. the pair properties
-            - When generating links to different statement types, use query
-              links instead of hash-based links e.g., instead of
-              https://db.indra.bio/statements/from_hash/-26724098956735262?format=html,
-              link to
-              https://db.indra.bio/statements/from_agents?subject=HBP1&object=CDKN2A&type=IncreaseAmount&format=html
-        - Should we include any sentences?
-            - Maybe choose the statement involving A and B with the highest
-              evidence count / belief score and choose one example sentence
-              to add to the edge?
-        - How to generate the edge label (the general pattern is
-          "A (interaction type) B")?
-            - Make these as specific as possible, the least specific being
-              "A (interacts with) B"
-
-    go2genes_map:
+    Parameters
+    ----------
+    go2genes_map :
         A dict mapping GO IDs to lists of genes
-    pair_props:
+    pair_props :
+        Lookup for edges
+    go_dag :
+        The ontology hierarchy represented in a graph
 
+    Returns
+    -------
+    :
+        Dict of assembled networks by go id
     """
-    # Apply Layout after creation
-    pass
+    networks = {}
+    # Only pass the relevant parts of the pair_props dict
+    for go_id, gene_set in tqdm(go2genes_map.items(), total=len(go2genes_map)):
+        # Get relevant pairs from pair_properties
+        prop_dict: Dict[str, PairProperty] = {}
+        for g1, g2 in product(gene_set):
+            # Skip self loops; should already have been removed previously
+            if g1 == g2:
+                continue
+
+            # Get pair and property for it
+            pair = f"{g1}|{g2}"
+            prop = pair_props.get(pair)
+            if prop is not None:
+                prop_dict[pair] = prop
+
+        if not prop_dict:
+            logger.info(f'No statements for ID {go_id}')
+            continue
+
+        gna = GoNetworkAssembler(
+            identifier=go_id,
+            identifier_description=go_dag.nodes[go_id]["name"],
+            entity_list=list(gene_set),
+            pair_properties=prop_dict,
+        )
+        gna.assemble()
+        networks[go_id] = gna.model
+    return networks
 
 
 def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
@@ -363,7 +381,7 @@ def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
     go2genes_map = genes_by_go_id(go_path=GO_PATH, go_obo_dag=go_dag)
 
     # Iterate by GO ID and for each list of genes, build a network
-    build_networks(go2genes_map, sif_props)
+    return build_networks(go2genes_map, sif_props, go_dag)
 
 
 if __name__ == "__main__":
