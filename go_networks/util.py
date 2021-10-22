@@ -248,7 +248,7 @@ def set_pair(sif_df: pd.DataFrame):
     sif_df :
         DataFrame to set column pair in
     """
-    sif_df["pair"] = sif_df.apply(lambda r: f"{r.agA_name}|{r.agb_name}", axis=1)
+    sif_df["pair"] = sif_df.apply(lambda r: f"{r.agA_name}|{r.agB_name}", axis=1)
 
 
 # statement types by directedness
