@@ -116,7 +116,7 @@ class GoNetworkAssembler:
         if not ncx.nodes:
             self.no_nodes = True
             raise CxNoNodes(
-                f"No nodes in CxNetwork for {self.namespace}:" f"{self.identifier}"
+                f"No nodes in CxNetwork for {self.namespace}:{self.identifier}"
             )
 
     def _add_metadata(self):
@@ -138,12 +138,13 @@ class GoNetworkAssembler:
             self._add_edge_metadata(e, source, target)
 
     def _add_node_metadata(self, node):
-        if "db_refs" not in self.model.nodes[node]:
-            node_name = self.model.nodes[node]["n"]
-            db_refs = self.entity_lookup.get(node_name)
-            if db_refs is None:
-                logger.warning(f"No DB refs for node {node_name}")
-            self.model.set_node_attribute(node, "DB refs", db_refs)
+        node_name = self.model.nodes[node]["n"]
+        db_refs = self.entity_lookup.get(node_name)
+        if db_refs is None:
+            logger.warning(f"No DB refs for node {node_name}")
+            return
+        db_refs_list = [_format_entities(ns, _id) for ns, _id in db_refs.items()]
+        self.model.set_node_attribute(node, "DB refs", db_refs_list)
 
     def _add_edge_metadata(self, edge, source, target):
         source_name = (self.model.get_node(source) or {}).get("n")
