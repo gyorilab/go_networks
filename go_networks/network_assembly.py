@@ -13,6 +13,10 @@ from go_networks.data_models import PairProperty
 from indra_db.client import get_curations
 
 
+# Derived types
+DbRefs = Dict[str, str]
+
+
 logger = logging.getLogger(__file__)
 try:
     CURATIONS = get_curations()
@@ -40,6 +44,8 @@ class GoNetworkAssembler:
         self.identifier = identifier
         self.identifier_description = identifier_description
         self.entity_list = entity_list
+        # Filled out during cx assembly
+        self.entity_lookup: Dict[str, DbRefs] = {}
         self._pp = pair_properties
         self.model: Optional[NiceCXNetwork] = None  # Save the model here
         self.no_nodes: bool = False
@@ -57,7 +63,7 @@ class GoNetworkAssembler:
             "mechanistic interactions between genes/proteins that are "
             "associated with this GO process.",
         }
-        self.assembled_stmts = []
+        self.assembled_stmts: List[Statement] = []
 
     def _add_node(self):
         # Add db refs
@@ -94,39 +100,11 @@ class GoNetworkAssembler:
             stmts = ac.filter_by_curation(stmts, curations=CURATIONS)
         self.assembled_stmts = stmts
 
-    def assemble(self):
-        """
-        Iterate by GO ID and for each list of genes, build a network:
-            - Make a node for each gene with metadata representing db_refs
-            - Add all the edges between the list of genes with metadata coming
-              from the pre-calculated data in (4), i.e. the pair properties
-                - When generating links to different statement types, use query
-                  links instead of hash-based links e.g., instead of
-                  https://db.indra.bio/statements/from_hash/-26724098956735262?format=html,
-                  link to
-                  https://db.indra.bio/statements/from_agents?subject=HBP1&object=CDKN2A&type=IncreaseAmount&format=html
-            - Should we include any sentences?
-                - Maybe choose the statement involving A and B with the highest
-                  evidence count / belief score and choose one example sentence
-                  to add to the edge?
-            - How to generate the edge label (the general pattern is
-              "A (interaction type) B")?
-                - Make these as specific as possible, the least specific being
-                  "A (interacts with) B"
+        # Run entity lookup now that statements are assembled
+        self._set_entity_lookup()
 
-        Returns
-        -------
-
-        """
-        if self.model is not None:
-            print("Model is already assembled!")
-            return
-
-        if not self.assembled_stmts:
-            logger.info("Running preassembly")
-            self._stmt_assembly()
-
-        # pre-assemble
+    def _cx_assembly(self):
+        # assemble cx network
         logger.info("Assembling CX model")
         ca = NiceCxAssembler(
             self.assembled_stmts, f"{self.identifier} ({self.identifier_description})"
@@ -141,8 +119,109 @@ class GoNetworkAssembler:
                 f"No nodes in CxNetwork for {self.namespace}:" f"{self.identifier}"
             )
 
+    def _add_metadata(self):
+        # Loop edges and add edge and node meta data
+        nodes_set = set()
+        for e in self.model.edges:
+            # Set node meta data
+            source = self.model.edges[e]["s"]
+            if source not in nodes_set:
+                self._add_node_metadata(source)
+                nodes_set.add(source)
+
+            target = self.model.edges[e]["t"]
+            if target not in nodes_set:
+                self._add_node_metadata(target)
+                nodes_set.add(target)
+
+            # Set edge metadata
+            self._add_edge_metadata(e, source, target)
+
+    def _add_node_metadata(self, node):
+        if "db_refs" not in self.model.nodes[node]:
+            node_name = self.model.nodes[node]["n"]
+            db_refs = self.entity_lookup.get(node_name)
+            if db_refs is None:
+                logger.warning(f"No DB refs for node {node_name}")
+            self.model.set_node_attribute(node, "DB refs", db_refs)
+
+    def _add_edge_metadata(self, edge, source, target):
+        source_name = (self.model.get_node(source) or {}).get("n")
+        target_name = (self.model.get_node(target) or {}).get("n")
+        if source_name is None or target_name is None:
+            logger.warning(f"Could not get node ids for edge {edge}")
+            return
+        pair = f"{source_name}|{target_name}"
+        rev_pair = f"{target_name}|{source_name}"
+        # The edges in the model are from the statements contained in the
+        # associated PairProperties, so should not get KeyError here
+        try:
+            for key, value in (
+                self._pp[pair].dict(exclude={"a", "b", "statements"}).items()
+            ):
+                self.model.set_edge_attribute(edge, key, value)
+        # Can happen with Complex
+        except KeyError:
+            for key, value in (
+                self._pp[rev_pair].dict(exclude={"a", "b", "statements"}).items()
+            ):
+                self.model.set_edge_attribute(edge, key, value)
+
+    def assemble(self):
+        """Assemble cx network
+
+        - Make a node for each gene with metadata representing db_refs
+        - Add all the edges between the list of genes with metadata coming
+          from the pre-calculated data in (4), i.e. the pair properties
+            - When generating links to different statement types, use query
+              links instead of hash-based links e.g., instead of
+              https://db.indra.bio/statements/from_hash/-26724098956735262?format=html,
+              link to
+              https://db.indra.bio/statements/from_agents?subject=HBP1&object=CDKN2A&type=IncreaseAmount&format=html
+        - Should we include any sentences?
+            - Maybe choose the statement involving A and B with the highest
+              evidence count / belief score and choose one example sentence
+              to add to the edge?
+        - How to generate the edge label (the general pattern is
+          "A (interaction type) B")?
+            - Make these as specific as possible, the least specific being
+              "A (interacts with) B"
+        """
+        if self.no_nodes:
+            print("Model contains no nodes")
+            return
+
+        if self.model is not None:
+            print("Model is already assembled!")
+            return
+
+        if not self.assembled_stmts:
+            logger.info("Running statement preassembly")
+            self._stmt_assembly()
+
+        # Assemble cx graph
+        self._cx_assembly()
+
+        # Set meta-data
+        self._add_metadata()
+
         # Apply Layout after creation - see format_and_upload_network()
         pass
+
+    def _set_entity_lookup(self):
+        # If already set, return
+        if self.entity_lookup:
+            return
+
+        # Loop agents of statements and create an agent lookup
+        for stmt in self.assembled_stmts:
+            for ag in stmt.agent_list():
+                if ag.name not in self.entity_lookup:
+                    self.entity_lookup[ag.name] = ag.db_refs
+                elif set(self.entity_lookup[ag.name]).symmetric_difference_update(
+                    ag.db_refs
+                ):
+                    self.entity_lookup[ag.name].update(ag.db_refs)
 
 
 def filter_out_medscan(stmts: List[Statement]) -> List[Statement]:
