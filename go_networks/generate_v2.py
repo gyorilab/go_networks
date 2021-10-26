@@ -303,7 +303,7 @@ def genes_by_go_id(
     logger.info("Extending go to gene mapping with child ids")
     for go_id, gene_set in tqdm(mapping.items(), total=len(mapping)):
         for child_go_id in nx.ancestors(go_dag, go_id):
-            gene_set.update(mapping[child_go_id])
+            gene_set.update(mapping.get(child_go_id, set()))
 
     return mapping
 
