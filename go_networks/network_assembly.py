@@ -38,15 +38,14 @@ class GoNetworkAssembler:
         identifier: str,  # go ID
         identifier_description: str,  # Description of GO ID
         entity_list: List[str],  # Associated genes
-        pair_properties: Dict[str, PairProperty],  # Lookup for these genes
+        pair_properties: Dict[str, List[Dict[str, int]]],  # Lookup for these genes
     ):
-
         self.identifier = identifier
         self.identifier_description = identifier_description
         self.entity_list = entity_list
         # Filled out during cx assembly
         self.entity_lookup: Dict[str, DbRefs] = {}
-        self._pp = pair_properties
+        self.pair_properties = pair_properties
         self.model: Optional[NiceCXNetwork] = None  # Save the model here
         self.no_nodes: bool = False
         self.network_attributes = {

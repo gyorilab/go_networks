@@ -1,10 +1,11 @@
 """
 Generate GO Networks
 """
+from collections import defaultdict
 import logging
 import pickle
 import obonet
-from itertools import product
+from itertools import combinations
 from pathlib import Path
 from typing import Optional, Dict, Set, Tuple, List, Union
 
@@ -16,11 +17,13 @@ from tqdm import tqdm
 
 from go_networks.data_models import PairProperty, Entity, StmtsByDirectness
 from go_networks.util import (
+    DIRECTED_TYPES,
+    UNDIRECTED_TYPES,
     load_latest_sif,
-    set_directed,
-    set_reverse_directed,
-    set_pair,
-    get_stmts,
+    #set_directed,
+    #set_reverse_directed,
+    #set_pair,
+    #get_stmts,
 )
 from go_networks.network_assembly import GoNetworkAssembler
 from indra.databases import uniprot_client
@@ -54,45 +57,44 @@ def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
     return sif.query("agA_ns == 'HGNC' & agB_ns == 'HGNC'")
 
 
-def get_pair_properties(
-    dir_dict: Dict[str, Dict[str, bool]],
-    dir_ev_count: EvCountDict,
-    rev_dir_ev_count: EvCountDict,
-    undir_ev_count: EvCountDict,
-    stmts_by_pair: Dict[str, StmtsByDirectness],
-    entity_dict: NameEntityMap,
-) -> Dict[str, PairProperty]:
-    pair_properties = {}
-    for pair, stmts_by_dir in stmts_by_pair.items():
-        # Get properties per pair
-        is_dir = dir_dict[pair]["directed"]
-        is_rev_dir = dir_dict[pair]["reverse_directed"]
-        dir_ec = dir_ev_count.get(pair, {})  # Empty dict = no counts
-        r_dir_ec = rev_dir_ev_count.get(pair, {})  # Empty dict = no counts
-        u_dir_ec = undir_ev_count.get(pair, {})  # Empty dict = no counts
+# def get_pair_properties(
+#     dir_dict: Dict[str, Dict[str, bool]],
+#     dir_ev_count: EvCountDict,
+#     rev_dir_ev_count: EvCountDict,
+#     undir_ev_count: EvCountDict,
+#     entity_dict: NameEntityMap,
+# ) -> Dict[str, PairProperty]:
+#     pair_properties = {}
+#     for pair, stmts_by_dir in stmts_by_pair.items():
+#         # Get properties per pair
+#         is_dir = dir_dict[pair]["directed"]
+#         is_rev_dir = dir_dict[pair]["reverse_directed"]
+#         dir_ec = dir_ev_count.get(pair, {})  # Empty dict = no counts
+#         r_dir_ec = rev_dir_ev_count.get(pair, {})  # Empty dict = no counts
+#         u_dir_ec = undir_ev_count.get(pair, {})  # Empty dict = no counts
 
-        # Get name
-        a_name, b_name = pair.split("|")
-        a_ns, a_id = entity_dict[a_name]
-        b_ns, b_id = entity_dict[b_name]
+#         # Get name
+#         a_name, b_name = pair.split("|")
+#         a_ns, a_id = entity_dict[a_name]
+#         b_ns, b_id = entity_dict[b_name]
 
-        # Set entity data
-        a = Entity(ns=a_ns, id=a_id, name=a_name)
-        b = Entity(ns=b_ns, id=b_id, name=b_name)
+#         # Set entity data
+#         a = Entity(ns=a_ns, id=a_id, name=a_name)
+#         b = Entity(ns=b_ns, id=b_id, name=b_name)
 
-        # Add to output dict
-        pair_properties[pair] = PairProperty(
-            a=a,
-            b=b,
-            statements=stmts_by_dir,
-            directed=is_dir,
-            reverse_directed=is_rev_dir,
-            directed_evidence_count=dir_ec,
-            reverse_directed_evidence_count=r_dir_ec,
-            undirected_evidence_count=u_dir_ec,
-        )
+#         # Add to output dict
+#         pair_properties[pair] = PairProperty(
+#             a=a,
+#             b=b,
+#             statements=stmts_by_dir,
+#             directed=is_dir,
+#             reverse_directed=is_rev_dir,
+#             directed_evidence_count=dir_ec,
+#             reverse_directed_evidence_count=r_dir_ec,
+#             undirected_evidence_count=u_dir_ec,
+#         )
 
-    return pair_properties
+#     return pair_properties
 
 
 def generate_props(
@@ -102,9 +104,6 @@ def generate_props(
 
     For each pair of genes (A,B) (excluding self loops), generate the
     following properties:
-        - "directed": true if directed A->B statement exists otherwise false
-        - "reverse directed": true if directed B->A statement exists
-          otherwise false
         - "SOURCE => TARGET": aggregate number of evidences by statement
           type for A->B statements
         - "TARGET => SOURCE": aggregate number of evidences by statement
@@ -113,118 +112,62 @@ def generate_props(
           for A-B undirected statements
     """
 
-    def _get_nested_dict(
-        tuple_dict: Dict[Tuple[str, str], Union[int, List[int]]]
-    ) -> Dict[str, Dict[str, Union[int, List[int]]]]:
-        # transform {(a, b): v} to {a: {b: v}}
-        nested_dict = {}
-        for (p, s), c in tqdm(tuple_dict.items()):
-            if p not in nested_dict:
-                nested_dict[p] = {s: c}
-            else:
-                nested_dict[p][s] = c
-        return nested_dict
-
     if props_file is not None and Path(props_file).is_file():
         logger.info(f"Loading property lookup from {props_file}")
         with Path(props_file).open(mode="rb") as fr:
-            properties = pickle.load(fr)
-
+            props_by_pair = pickle.load(fr)
     else:
-        # Set pair column
-        logger.info("Setting pair column")
-        set_pair(sif_df)
+        hashes_by_pair = defaultdict(set)
+        props_by_hash = {}
 
-        # Get name to entity mapping
-        logger.info("Creating name to (ns, id) mapping")
-        ns_id_name_tups = set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
-            set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
-        )
-        entity_mapping = {name: (ns, _id) for ns, _id, name in tqdm(ns_id_name_tups)}
+        def get_direction(row, pair):
+            directed = (row.stmt_type in DIRECTED_TYPES)
+            direction = (row.agA_name == pair[0])
+            if directed:
+                if direction:
+                    return "forward"
+                else:
+                    return "reverse"
+            else:
+                return "undirected"
 
-        # Set directed/undirected column
-        logger.info("Setting directed column")
-        set_directed(sif_df)
+        for _, row in tqdm.tqdm(sif_df.iterrows(), total=len(sif_df)):
+            pair = tuple(sorted([row.agA_name, row.agB_name]))
+            hashes_by_pair[pair].add(row.stmt_hash)
+            if row.stmt_hash not in props_by_hash:
+                props_by_hash[row.stmt_hash] = {
+                    "ev_count": row.evidence_count,
+                    "stmt_type": row.stmt_type,
+                    "direction": get_direction(row, pair)
+                }
+        hashes_by_pair = dict(hashes_by_pair)
 
-        # Set reverse directed column
-        logger.info("Setting reverse directed column")
-        set_reverse_directed(sif_df)
+        def aggregate_props(props):
+            ev_forward = defaultdict(int)
+            ev_reverse = defaultdict(int)
+            ev_undirected = defaultdict(int)
+            for prop in props:
+                if prop["direction"] == "forward":
+                    ev_forward[prop["stmt_type"]] += prop["ev_count"]
+                elif prop["direction"] == "reverse":
+                    ev_reverse[prop["stmt_type"]] += prop["ev_count"]
+                else:
+                    ev_undirected[prop["stmt_type"]] += prop["ev_count"]
+            return dict(ev_forward), dict(ev_reverse), dict(ev_undirected)
 
-        # Do group-by on pair and get:
-        #   - if pair has directed stmts
-        #   - if pair has reverse directed stmts
-        #   - A->B aggregated evidence counts, per stmt_type
-        #   - B->A aggregated evidence counts, per stmt_type
-        #   - A-B (undirected) aggregated evidence counts
-
-        logger.info("Getting directed, reverse directed dict")
-        dir_dict = (
-            sif_df.groupby("pair")
-            .aggregate({"reverse_directed": any, "directed": any})
-            .to_dict("index")
-        )
-
-        # Gets a multiindexed series with pair, stmt_type as indices
-        logger.info(
-            "Getting aggregated evidence counts per statement type for "
-            "directed statements"
-        )
-        dir_ev_count_dict: Dict = (
-            sif_df[sif_df.directed]
-            .groupby(["pair", "stmt_type"])
-            .aggregate(np.sum)
-            .evidence_count.to_dict()
-        )
-        dir_ev_count = _get_nested_dict(dir_ev_count_dict)
-
-        logger.info(
-            "Getting aggregated evidence counts per statement type for "
-            "reverse directed statements"
-        )
-        rev_dir_count_dict = (
-            sif_df[sif_df.reverse_directed]
-            .groupby(["pair", "stmt_type"])
-            .aggregate(np.sum)
-            .evidence_count.to_dict()
-        )
-        rev_dir_ev_count = _get_nested_dict(rev_dir_count_dict)
-
-        logger.info(
-            "Getting aggregated evidence counts per statement type for "
-            "undirected statements"
-        )
-        undir_count_dict = (
-            sif_df[sif_df.directed == False]
-            .groupby(["pair", "stmt_type"])
-            .aggregate(np.sum)
-            .evidence_count.to_dict()
-        )
-        undir_ev_count = _get_nested_dict(undir_count_dict)
-
-        # Get hashes per pair
-        logger.info("Getting stmt type, hash per pair")
-        stmts_by_pair = get_stmts(sif_df)
-
-        # Make dictionary with (A, B) tuple as key and PairProperty as value -
-        # get values from all the produced dicts
-        logger.info("Assembling all data to lookup by pair")
-        properties = get_pair_properties(
-            dir_dict=dir_dict,
-            dir_ev_count=dir_ev_count,
-            rev_dir_ev_count=rev_dir_ev_count,
-            undir_ev_count=undir_ev_count,
-            stmts_by_pair=stmts_by_pair,
-            entity_dict=entity_mapping,
-        )
+        props_by_pair = {}
+        for pair, hashes in hashes_by_pair.items():
+            props_by_pair[pair] = aggregate_props([props_by_hash[h]
+                                                   for h in hashes])
 
         # Write to file if provided
         if props_file:
             logger.info(f"Saving property lookup to {props_file}")
             Path(props_file).absolute().parent.mkdir(exist_ok=True, parents=True)
             with Path(props_file).open(mode="wb") as fo:
-                pickle.dump(obj=properties, file=fo)
+                pickle.dump(obj=props_by_pair, file=fo)
 
-    return properties
+    return props_by_pair
 
 
 def genes_by_go_id(
@@ -331,14 +274,10 @@ def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str,
     # Only pass the relevant parts of the pair_props dict
     for go_id, gene_set in tqdm(go2genes_map.items(), total=len(go2genes_map)):
         # Get relevant pairs from pair_properties
-        prop_dict: Dict[str, PairProperty] = {}
-        for g1, g2 in product(gene_set, gene_set):
-            # Skip self loops; info for self-loop should already have been removed
-            if g1 == g2:
-                continue
-
+        prop_dict: Dict[str, List[Dict[str, int]]] = {}
+        for g1, g2 in combinations(gene_set, 2):
             # Get pair and property for it
-            pair = f"{g1}|{g2}"
+            pair = sorted([g1, g2])
             prop = pair_props.get(pair)
             if prop is not None:
                 prop_dict[pair] = prop
@@ -358,6 +297,22 @@ def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str,
     return networks
 
 
+def filter_self_loops(df):
+    """Remove self-loops from a dataframe
+
+    Parameters
+    ----------
+    df :
+        The dataframe to filter
+
+    Returns
+    -------
+    :
+        The filtered dataframe
+    """
+    return df[df.agA_name != df.agB_name]
+
+
 def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
     """Generate new GO networks from INDRA statements
 
@@ -374,6 +329,9 @@ def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
 
     # Filter to HGNC-only rows
     sif_df = filter_to_hgnc(sif_df)
+
+    # Filter out self-loops
+    sif_df = filter_self_loops(sif_df)
 
     # Generate properties
     sif_props = generate_props(sif_df, props_file)
