@@ -32,8 +32,8 @@ NameEntityMap = Dict[str, Tuple[str, str]]
 
 # Constants
 HERE = Path(__file__).absolute().parent
-GO_PATH = HERE.joinpath("goa_human.gaf").as_posix()
-GO_OBO_PATH = HERE.joinpath("go.obo").as_posix()
+GO_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
+GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
 
 logger = logging.getLogger(__name__)
 
