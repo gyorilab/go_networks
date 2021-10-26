@@ -330,8 +330,8 @@ def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str, PairProperty], 
     for go_id, gene_set in tqdm(go2genes_map.items(), total=len(go2genes_map)):
         # Get relevant pairs from pair_properties
         prop_dict: Dict[str, PairProperty] = {}
-        for g1, g2 in product(gene_set):
-            # Skip self loops; should already have been removed previously
+        for g1, g2 in product(gene_set, gene_set):
+            # Skip self loops; info for self-loop should already have been removed
             if g1 == g2:
                 continue
 
@@ -342,7 +342,7 @@ def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str, PairProperty], 
                 prop_dict[pair] = prop
 
         if not prop_dict:
-            logger.info(f'No statements for ID {go_id}')
+            logger.info(f"No statements for ID {go_id}")
             continue
 
         gna = GoNetworkAssembler(
