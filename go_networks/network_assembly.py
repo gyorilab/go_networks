@@ -65,19 +65,7 @@ class GoNetworkAssembler:
         }
         self.assembled_stmts: List[Statement] = []
 
-    def _add_node(self):
-        # Add db refs
-        pass
-
     def _add_edge(self):
-        # Add nodes of edge
-        # Add meta data from pair properties
-        # Get and add sentence from a top ranked statements of the edge
-        # Figure out most specific edge label
-        # - interacts with (undirected)
-        #   - affects (for directed statements)
-        #     - up/downregulates (for signed-like stmt types)
-        #       - stmt type (for specific statements types)
         pass
 
     def _stmt_assembly(self):
@@ -147,6 +135,14 @@ class GoNetworkAssembler:
         self.model.set_node_attribute(node, "DB refs", db_refs_list)
 
     def _add_edge_metadata(self, edge, source, target):
+        # ToDo:
+        #  Add meta data from pair properties
+        #  Get and add sentence from a top ranked statements of the edge
+        #  Figure out most specific edge label
+        #  - interacts with (undirected)
+        #    - affects (for directed statements)
+        #      - up/downregulates (for signed-like stmt types)
+        #        - stmt type (for specific statements types)
         source_name = (self.model.get_node(source) or {}).get("n")
         target_name = (self.model.get_node(target) or {}).get("n")
         if source_name is None or target_name is None:
@@ -163,10 +159,15 @@ class GoNetworkAssembler:
                 self.model.set_edge_attribute(edge, key, value)
         # Can happen with Complex
         except KeyError:
-            for key, value in (
-                self._pp[rev_pair].dict(exclude={"a", "b", "statements"}).items()
-            ):
-                self.model.set_edge_attribute(edge, key, value)
+            try:
+                for key, value in (
+                    self._pp[rev_pair].dict(exclude={"a", "b", "statements"}).items()
+                ):
+                    self.model.set_edge_attribute(edge, key, value)
+            except KeyError:
+                logger.warning(f"Could not set edge attributes for {pair} "
+                               f"or {rev_pair}")
+                return
 
     def assemble(self):
         """Assemble cx network
