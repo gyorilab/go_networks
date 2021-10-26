@@ -238,3 +238,10 @@ def filter_out_medscan(stmts: List[Statement]) -> List[Statement]:
         filtered_stmts.append(stmt)
     logger.info("%d statements after filter" % len(filtered_stmts))
     return filtered_stmts
+
+
+def _format_entities(db_name: str, db_id: str) -> str:
+    if ':' in db_id:
+        return db_id
+    else:
+        return f"{db_name}:{db_id}"
