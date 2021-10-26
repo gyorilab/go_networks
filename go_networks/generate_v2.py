@@ -34,7 +34,7 @@ EvCountDict = Dict[str, Dict[str, int]]
 NameEntityMap = Dict[str, Tuple[str, str]]
 
 # Constants
-HERE = Path(__file__).absolute().parent
+HERE = Path(__file__).absolute().parent.parent
 GO_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
 
@@ -169,91 +169,59 @@ def generate_props(
 
     return props_by_pair
 
+def genes_by_go_id(path):
+    """Load the gene/GO annotations as a pandas data frame."""
+    goa = pd.read_csv(path, sep='\t',
+                      comment='!', dtype=str,
+                      header=None,
+                      names=['DB',
+                             'DB_ID',
+                             'DB_Symbol',
+                             'Qualifier',
+                             'GO_ID',
+                             'DB_Reference',
+                             'Evidence_Code',
+                             'With_From',
+                             'Aspect',
+                             'DB_Object_Name',
+                             'DB_Object_Synonym',
+                             'DB_Object_Type',
+                             'Taxon',
+                             'Date',
+                             'Assigned',
+                             'Annotation_Extension',
+                             'Gene_Product_Form_ID'])
+    # Filter out all "NOT" negative evidences
+    goa['Qualifier'].fillna('', inplace=True)
+    goa = goa[~goa['Qualifier'].str.startswith('NOT')]
 
-def genes_by_go_id(
-    go_path: str = GO_PATH, go_obo_dag: Optional[MultiDiGraph] = None
-) -> Go2Genes:
-    """For each GO id, get the associated genes
+    go_dag = obonet.read_obo(GO_OBO_PATH)
 
-    Parameters
-    ----------
-    go_path :
-        If provided, load the go file from here, otherwise assume the file
-        is in the directory of this file with file name goa_human.gaf
-    go_obo_dag :
-        If provided, the dag representing the GO ontology hierarchy. If not
-        provided, load it from its default
+    genes_by_go_id = defaultdict(set)
+    for go_id, up_id in zip(goa.GO_ID, goa.DB_ID):
+        if go_dag.nodes[go_id]['namespace'] != 'biological_process':
+            continue
+        gene_name = uniprot_client.get_gene_name(up_id)
+        if gene_name:
+            genes_by_go_id[go_id].add(gene_name)
 
-    Returns
-    -------
-    :
-        A mapping of GO ids to genes
-    """
-    logger.info(f"Reading GO annotations file from {go_path}")
-    goa_df: pd.DataFrame = pd.read_csv(
-        go_path,
-        sep="\t",
-        comment="!",
-        dtype=str,
-        header=None,
-        names=[
-            "DB",
-            "DB_ID",
-            "DB_Symbol",
-            "Qualifier",
-            "GO_ID",
-            "DB_Reference",
-            "Evidence_Code",
-            "With_From",
-            "Aspect",
-            "DB_Object_Name",
-            "DB_Object_Synonym",
-            "DB_Object_Type",
-            "Taxon",
-            "Date",
-            "Assigned",
-            "Annotation_Extension",
-            "Gene_Product_Form_ID",
-        ],
-    )
-
-    # Get go dag
-    if go_obo_dag is None:
-        logger.info(f"Reading GO OBO file from {GO_OBO_PATH}")
-        go_dag = obonet.read_obo(GO_OBO_PATH)
-    else:
-        go_dag = go_obo_dag
-
-    # Filter out negative evidence
-    goa_df = goa_df[goa_df.Qualifier.str.startswith("NOT")]
-    goa_df["entity"] = list(zip(goa_df.DB, goa_df.DB_ID, goa_df.DB_Symbol))
-    up_mapping = dict(
-        *(
-            goa_df.groupby("GO_ID").agg({"DB_ID": lambda x: x.tolist()}).to_dict()
-        ).values()
-    )
-    logger.info("Translating genes from UP to HGNC")
-    mapping = {}
-    for go_id, gene_list in tqdm(up_mapping.items(), total=len(up_mapping)):
-        gene_names = set()
-        for up_id in gene_list:
-            gene_name = uniprot_client.get_gene_name(up_id)
-            if gene_name is not None:
-                gene_names.add(gene_name)
-        if gene_names:
-            mapping[go_id] = gene_names
-
-    logger.info("Extending go to gene mapping with child ids")
-    for go_id, gene_set in tqdm(mapping.items(), total=len(mapping)):
+    for go_id in genes_by_go_id:
         for child_go_id in nx.ancestors(go_dag, go_id):
-            gene_set.update(mapping.get(child_go_id, set()))
+            genes_by_go_id[go_id] |= genes_by_go_id[child_go_id]
 
-    return mapping
+    return genes_by_go_id
 
 
-def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str,
-                                                            PairProperty],
-                   go_dag) -> Dict[str, GoNetworkAssembler]:
+def get_go_ids():
+    """Get a list of all GO IDs."""
+    go_ids = [n for n in go_dag.nodes
+              if go_dag.nodes[n]['namespace'] == 'biological_process']
+    return go_ids
+
+
+def build_networks(go2genes_map: Go2Genes,
+                   pair_props: Dict[Tuple, List[Dict[str, int]]],
+                   ) -> Dict[str, GoNetworkAssembler]:
     """Build networks per go-id associated genes
 
     Parameters
@@ -288,7 +256,6 @@ def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str,
 
         gna = GoNetworkAssembler(
             identifier=go_id,
-            identifier_description=go_dag.nodes[go_id]["name"],
             entity_list=list(gene_set),
             pair_properties=prop_dict,
         )
@@ -337,11 +304,10 @@ def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
     sif_props = generate_props(sif_df, props_file)
 
     # Make genes by GO ID dict
-    go_dag = obonet.read_obo(GO_OBO_PATH)
     go2genes_map = genes_by_go_id(go_path=GO_PATH, go_obo_dag=go_dag)
 
     # Iterate by GO ID and for each list of genes, build a network
-    return build_networks(go2genes_map, sif_props, go_dag)
+    return build_networks(go2genes_map, sif_props)
 
 
 if __name__ == "__main__":

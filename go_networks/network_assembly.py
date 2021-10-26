@@ -36,7 +36,6 @@ class GoNetworkAssembler:
     def __init__(
         self,
         identifier: str,  # go ID
-        identifier_description: str,  # Description of GO ID
         entity_list: List[str],  # Associated genes
         pair_properties: Dict[str, List[Dict[str, int]]],  # Lookup for these genes
     ):
@@ -54,7 +53,7 @@ class GoNetworkAssembler:
             "GO hierarchy": "biological process",
             "Prov:wasGeneratedBy": "INDRA",
             "Organism": "Homo sapiens (Human)",
-            "Description": identifier_description,
+            "Description": bio_ontology.get_name('GO', identifier),
             "Methods": "This network was assembled automatically by INDRA "
             "(http://indra.bio) by processing all available biomedical "
             "literature with multiple machine reading systems, and "
