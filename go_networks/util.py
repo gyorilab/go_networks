@@ -3,6 +3,7 @@ import pickle
 from collections import defaultdict
 from copy import deepcopy
 from itertools import combinations
+from pathlib import Path
 from typing import List, Set, Dict
 
 import boto3
@@ -30,6 +31,8 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+HERE = Path(__file__).absolute().parent
+STMTS_PKL: str = HERE.joinpath("_stmts_cache.pkl").absolute().as_posix()
 STMT_CACHE: Dict[int, Statement] = {}
 
 
@@ -110,12 +113,27 @@ def get_stmts(sif_df: pd.DataFrame) -> Dict[str, StmtsByDirectness]:
 
     hashes = set(sif_df.stmt_hash)
 
-    # Get current stmts - check global first
-    stmt_by_hash = {h: st for h, st in STMT_CACHE.items() if h in hashes}
-    missing_hashes = hashes.difference(set(STMT_CACHE))
+    # Load cached statements
+    if Path(STMTS_PKL).is_file():
+        logger.info("Loading pickled statements")
+        with Path(STMTS_PKL).open('rb') as f:
+            pkl_stmts: Dict[int, Statement] = pickle.load(f)
+        STMT_CACHE.update(pkl_stmts)
+    else:
+        pkl_stmts = {}
+
+    # Get current stmts - check loaded stmts, then local cache
+    stmt_by_hash = {h: st for h, st in pkl_stmts.items() if h in hashes}
+    for h in hashes:
+        if h in STMT_CACHE and h not in stmt_by_hash:
+            stmt_by_hash[h] = STMT_CACHE[h]
+
+    # stmt_by_hash.update({h: st for h, st in STMT_CACHE.items() if h in hashes})
+    missing_hashes = hashes.difference(set(stmt_by_hash))
 
     if missing_hashes:
         # Download missing statements
+        logger.info(f"Downloading {len(missing_hashes)} missing statements")
         new_stmts_by_hash = download_statements(missing_hashes)
 
         # Merge dicts
@@ -124,11 +142,21 @@ def get_stmts(sif_df: pd.DataFrame) -> Dict[str, StmtsByDirectness]:
         # Update global
         STMT_CACHE.update(stmt_by_hash)
 
+        # Check if new statements were added overall and write to cache
+        if set(STMT_CACHE.keys()).difference(pkl_stmts.keys()):
+            logger.info(f"Dumping new statements cache to {STMTS_PKL}")
+            with Path(STMTS_PKL).open('wb') as f:
+                pickle.dump(obj=STMT_CACHE, file=f)
+
     # Combine statements with pairs, expand Complexes
     stmts_by_pair = {}
     for pair, hash_list in tqdm(hashes_by_pair.items()):
         stmt_by_dir = StmtsByDirectness(directed={}, undirected=defaultdict(list))
-        for h, st in zip(hash_list, (stmt_by_hash[h] for h in hash_list)):
+        for h, st in zip(hash_list, (stmt_by_hash.get(h) for h in hash_list)):
+            if st is None:
+                logger.warning(f"No statement for hash {h}")
+                continue
+
             if isinstance(st, Complex):
                 cplx_stmts = expand_complex(st)
                 stmt_by_dir.undirected[h].extend(cplx_stmts)
