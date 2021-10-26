@@ -308,7 +308,9 @@ def genes_by_go_id(
     return mapping
 
 
-def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str, PairProperty], go_dag):
+def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str,
+                                                            PairProperty],
+                   go_dag) -> Dict[str, GoNetworkAssembler]:
     """Build networks per go-id associated genes
 
     Parameters
@@ -352,7 +354,7 @@ def build_networks(go2genes_map: Go2Genes, pair_props: Dict[str, PairProperty], 
             pair_properties=prop_dict,
         )
         gna.assemble()
-        networks[go_id] = gna.model
+        networks[go_id] = gna
     return networks
 
 
