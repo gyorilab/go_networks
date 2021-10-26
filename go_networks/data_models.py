@@ -1,7 +1,7 @@
 """
 BaseModels carrying data and properties
 """
-from typing import List, Dict, Tuple
+from typing import Dict, Tuple, DefaultDict, List
 
 from pydantic import BaseModel, constr
 
@@ -24,11 +24,14 @@ class StmtsByDirectness(BaseModel):
     """Group statements based on of they are directed or not"""
 
     directed: Dict[int, Statement]
-    undirected: Dict[int, List[Statement]]
+    undirected: DefaultDict[int, list[Statement]]
 
     def has_data(self):
         """Shortcut to check if model contains any data"""
         return len(self.undirected) > 0 or len(self.directed) > 0
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class PairProperty(BaseModel):
