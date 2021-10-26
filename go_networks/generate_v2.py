@@ -20,13 +20,9 @@ from go_networks.util import (
     DIRECTED_TYPES,
     UNDIRECTED_TYPES,
     load_latest_sif,
-    #set_directed,
-    #set_reverse_directed,
-    #set_pair,
-    #get_stmts,
 )
 from go_networks.network_assembly import GoNetworkAssembler
-from indra.databases import uniprot_client
+from indra.databases import uniprot_client, hgnc_client
 
 # Derived types
 Go2Genes = Dict[str, Set[str]]
@@ -35,8 +31,10 @@ NameEntityMap = Dict[str, Tuple[str, str]]
 
 # Constants
 HERE = Path(__file__).absolute().parent.parent
-GO_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
+GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
+LOCAL_SIF = '/Users/ben/.data/indra/db/sif.pkl'
+PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
 
 logger = logging.getLogger(__name__)
 
@@ -55,46 +53,6 @@ def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
 def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
     """Filter sif dataframe to HGNC pairs only"""
     return sif.query("agA_ns == 'HGNC' & agB_ns == 'HGNC'")
-
-
-# def get_pair_properties(
-#     dir_dict: Dict[str, Dict[str, bool]],
-#     dir_ev_count: EvCountDict,
-#     rev_dir_ev_count: EvCountDict,
-#     undir_ev_count: EvCountDict,
-#     entity_dict: NameEntityMap,
-# ) -> Dict[str, PairProperty]:
-#     pair_properties = {}
-#     for pair, stmts_by_dir in stmts_by_pair.items():
-#         # Get properties per pair
-#         is_dir = dir_dict[pair]["directed"]
-#         is_rev_dir = dir_dict[pair]["reverse_directed"]
-#         dir_ec = dir_ev_count.get(pair, {})  # Empty dict = no counts
-#         r_dir_ec = rev_dir_ev_count.get(pair, {})  # Empty dict = no counts
-#         u_dir_ec = undir_ev_count.get(pair, {})  # Empty dict = no counts
-
-#         # Get name
-#         a_name, b_name = pair.split("|")
-#         a_ns, a_id = entity_dict[a_name]
-#         b_ns, b_id = entity_dict[b_name]
-
-#         # Set entity data
-#         a = Entity(ns=a_ns, id=a_id, name=a_name)
-#         b = Entity(ns=b_ns, id=b_id, name=b_name)
-
-#         # Add to output dict
-#         pair_properties[pair] = PairProperty(
-#             a=a,
-#             b=b,
-#             statements=stmts_by_dir,
-#             directed=is_dir,
-#             reverse_directed=is_rev_dir,
-#             directed_evidence_count=dir_ec,
-#             reverse_directed_evidence_count=r_dir_ec,
-#             undirected_evidence_count=u_dir_ec,
-#         )
-
-#     return pair_properties
 
 
 def generate_props(
@@ -131,7 +89,7 @@ def generate_props(
             else:
                 return "undirected"
 
-        for _, row in tqdm.tqdm(sif_df.iterrows(), total=len(sif_df)):
+        for _, row in tqdm(sif_df.iterrows(), total=len(sif_df)):
             pair = tuple(sorted([row.agA_name, row.agB_name]))
             hashes_by_pair[pair].add(row.stmt_hash)
             if row.stmt_hash not in props_by_hash:
@@ -169,9 +127,12 @@ def generate_props(
 
     return props_by_pair
 
-def genes_by_go_id(path):
+
+def genes_by_go_id():
     """Load the gene/GO annotations as a pandas data frame."""
-    goa = pd.read_csv(path, sep='\t',
+    go_dag = obonet.read_obo(GO_OBO_PATH)
+
+    goa = pd.read_csv(GO_ANNOTS_PATH, sep='\t',
                       comment='!', dtype=str,
                       header=None,
                       names=['DB',
@@ -194,29 +155,24 @@ def genes_by_go_id(path):
     # Filter out all "NOT" negative evidences
     goa['Qualifier'].fillna('', inplace=True)
     goa = goa[~goa['Qualifier'].str.startswith('NOT')]
-
-    go_dag = obonet.read_obo(GO_OBO_PATH)
+    # We can filter to just GO terms in the ontology since
+    # obsolete terms are not included in the GO DAG
+    goa = goa[goa['GO_ID'].isin(go_dag)]
 
     genes_by_go_id = defaultdict(set)
     for go_id, up_id in zip(goa.GO_ID, goa.DB_ID):
         if go_dag.nodes[go_id]['namespace'] != 'biological_process':
             continue
-        gene_name = uniprot_client.get_gene_name(up_id)
-        if gene_name:
-            genes_by_go_id[go_id].add(gene_name)
+        hgnc_id = uniprot_client.get_hgnc_id(up_id)
+        if hgnc_id:
+            gene_name = hgnc_client.get_gene_name(hgnc_id)
+            genes_by_go_id[go_id] = genes_by_go_id[go_id] | {gene_name}
 
-    for go_id in genes_by_go_id:
+    for go_id in set(genes_by_go_id):
         for child_go_id in nx.ancestors(go_dag, go_id):
             genes_by_go_id[go_id] |= genes_by_go_id[child_go_id]
 
     return genes_by_go_id
-
-
-def get_go_ids():
-    """Get a list of all GO IDs."""
-    go_ids = [n for n in go_dag.nodes
-              if go_dag.nodes[n]['namespace'] == 'biological_process']
-    return go_ids
 
 
 def build_networks(go2genes_map: Go2Genes,
@@ -230,8 +186,6 @@ def build_networks(go2genes_map: Go2Genes,
         A dict mapping GO IDs to lists of genes
     pair_props :
         Lookup for edges
-    go_dag :
-        The ontology hierarchy represented in a graph
 
     Returns
     -------
@@ -304,12 +258,13 @@ def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
     sif_props = generate_props(sif_df, props_file)
 
     # Make genes by GO ID dict
-    go2genes_map = genes_by_go_id(go_path=GO_PATH, go_obo_dag=go_dag)
+    go2genes_map = genes_by_go_id()
 
+    breakpoint()
     # Iterate by GO ID and for each list of genes, build a network
     return build_networks(go2genes_map, sif_props)
 
 
 if __name__ == "__main__":
     # Todo: allow local file to be passed
-    generate()
+    generate(LOCAL_SIF, PROPS_FILE)

@@ -40,7 +40,6 @@ class GoNetworkAssembler:
         pair_properties: Dict[str, List[Dict[str, int]]],  # Lookup for these genes
     ):
         self.identifier = identifier
-        self.identifier_description = identifier_description
         self.entity_list = entity_list
         # Filled out during cx assembly
         self.entity_lookup: Dict[str, DbRefs] = {}
