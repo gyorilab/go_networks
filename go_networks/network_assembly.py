@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from ndex2 import NiceCXNetwork
 
@@ -19,6 +19,7 @@ context_prefixes = {
     'ncbigene': 'http://identifiers.org/ncbigene:',
     'mesh': 'http://identifiers.org/mesh:'
 }
+
 
 def get_aliases(gene_name):
     hgnc_id = hgnc_client.get_hgnc_id(gene_name)

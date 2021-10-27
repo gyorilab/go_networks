@@ -7,17 +7,14 @@ import pickle
 import obonet
 from itertools import combinations
 from pathlib import Path
-from typing import Optional, Dict, Set, Tuple, List, Union
+from typing import Optional, Dict, Set, Tuple, List
 
 import ndex2.client
 from ndex2 import create_nice_cx_from_server
 import networkx as nx
-import numpy as np
 import pandas as pd
-from networkx import MultiDiGraph
 from tqdm import tqdm
 
-from go_networks.data_models import PairProperty, Entity, StmtsByDirectness
 from go_networks.util import (
     DIRECTED_TYPES,
     UNDIRECTED_TYPES,
@@ -63,7 +60,7 @@ def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
 
 def generate_props(
     sif_file: str, props_file: Optional[str] = None
-) -> Dict[str, PairProperty]:
+) -> Dict[str, List[Dict[str, int]]]:
     """Generate properties per pair from the Sif dump
 
     For each pair of genes (A,B) (excluding self loops), generate the
