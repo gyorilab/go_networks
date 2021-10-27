@@ -1,20 +1,11 @@
 import logging
 import pickle
-from collections import defaultdict
-from copy import deepcopy
-from itertools import combinations
 from pathlib import Path
-from typing import List, Set, Dict
+from typing import List
 
 import boto3
 import pandas as pd
-from tqdm import tqdm
-
-from go_networks.data_models import StmtsByDirectness
-from indra.sources import indra_db_rest
-from indra.sources.indra_db_rest import DBQueryStatementProcessor
 from indra.statements import *
-from indra.util import batch_iter
 from indra_db.cli.dump import Sif, S3Path, get_latest_dump_s3_path
 
 __all__ = [
@@ -22,10 +13,6 @@ __all__ = [
     "stmts_by_directedness",
     "DIRECTED_TYPES",
     "UNDIRECTED_TYPES",
-    #"set_directed",
-    #"set_reverse_directed",
-    #"set_pair",
-    #"get_stmts",
 ]
 
 

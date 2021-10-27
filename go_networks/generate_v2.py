@@ -306,6 +306,6 @@ if __name__ == "__main__":
     ndex_args = {'server': 'http://public.ndexbio.org',
                  'username': username,
                  'password': password}
-    for go_id, network in tqdm(networks.items()):
+    for go_id, network in tqdm(sorted(networks.items(), key=lambda x: x[0])):
         network_id = format_and_upload_network(network, network_set_id,
                                                style_ncx, **ndex_args)
