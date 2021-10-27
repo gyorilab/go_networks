@@ -36,6 +36,9 @@ GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
 LOCAL_SIF = '/Users/ben/.data/indra/db/sif.pkl'
 PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
 
+min_gene_count = 5
+max_gene_count = 200
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,7 +59,7 @@ def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
 
 
 def generate_props(
-    sif_df: pd.DataFrame, props_file: Optional[str] = None
+    sif_file: str, props_file: Optional[str] = None
 ) -> Dict[str, PairProperty]:
     """Generate properties per pair from the Sif dump
 
@@ -75,6 +78,15 @@ def generate_props(
         with Path(props_file).open(mode="rb") as fr:
             props_by_pair = pickle.load(fr)
     else:
+        # Load the latest INDRA SIF dump
+        sif_df = get_sif(sif_file)
+
+        # Filter to HGNC-only rows
+        sif_df = filter_to_hgnc(sif_df)
+
+        # Filter out self-loops
+        sif_df = filter_self_loops(sif_df)
+
         hashes_by_pair = defaultdict(set)
         props_by_hash = {}
 
@@ -165,7 +177,7 @@ def genes_by_go_id():
             continue
         hgnc_id = uniprot_client.get_hgnc_id(up_id)
         if hgnc_id:
-            gene_name = hgnc_client.get_gene_name(hgnc_id)
+            gene_name = hgnc_client.get_hgnc_name(hgnc_id)
             genes_by_go_id[go_id] = genes_by_go_id[go_id] | {gene_name}
 
     for go_id in set(genes_by_go_id):
@@ -195,14 +207,12 @@ def build_networks(go2genes_map: Go2Genes,
     networks = {}
     # Only pass the relevant parts of the pair_props dict
     for go_id, gene_set in tqdm(go2genes_map.items(), total=len(go2genes_map)):
+        def _key(g1, g2):
+            return tuple(sorted([g1, g2]))
         # Get relevant pairs from pair_properties
-        prop_dict: Dict[str, List[Dict[str, int]]] = {}
-        for g1, g2 in combinations(gene_set, 2):
-            # Get pair and property for it
-            pair = sorted([g1, g2])
-            prop = pair_props.get(pair)
-            if prop is not None:
-                prop_dict[pair] = prop
+        prop_dict = {_key(g1, g2): pair_props[_key(g1, g2)]
+                     for g1, g2 in combinations(gene_set, 2)
+                     if _key(g1, g2) in pair_props}
 
         if not prop_dict:
             logger.info(f"No statements for ID {go_id}")
@@ -234,7 +244,12 @@ def filter_self_loops(df):
     return df[df.agA_name != df.agB_name]
 
 
-def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
+def filter_go_ids(go2genes_map):
+    return {go_id: genes for go_id, genes in go2genes_map.items()
+            if min_gene_count <= len(genes) <= max_gene_count}
+
+
+def generate(sif_file: Optional[str] = None, props_file: Optional[str] = None):
     """Generate new GO networks from INDRA statements
 
     Parameters
@@ -245,22 +260,15 @@ def generate(local_sif: Optional[str] = None, props_file: Optional[str] = None):
         If provided, load property lookup from this file. Default: generate
         from sif dump.
     """
-    # Load the latest INDRA SIF dump
-    sif_df = get_sif(local_sif)
-
-    # Filter to HGNC-only rows
-    sif_df = filter_to_hgnc(sif_df)
-
-    # Filter out self-loops
-    sif_df = filter_self_loops(sif_df)
-
-    # Generate properties
-    sif_props = generate_props(sif_df, props_file)
-
     # Make genes by GO ID dict
     go2genes_map = genes_by_go_id()
 
-    breakpoint()
+    # Filter GO IDs
+    go2genes_map = filter_go_ids(go2genes_map)
+
+    # Generate properties
+    sif_props = generate_props(sif_file, props_file)
+
     # Iterate by GO ID and for each list of genes, build a network
     return build_networks(go2genes_map, sif_props)
 

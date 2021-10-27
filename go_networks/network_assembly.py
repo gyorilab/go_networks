@@ -41,11 +41,10 @@ class GoNetworkAssembler:
     ):
         self.identifier = identifier
         self.entity_list = entity_list
+        self.pair_properties = pair_properties
         # Filled out during cx assembly
         self.entity_lookup: Dict[str, DbRefs] = {}
-        self.pair_properties = pair_properties
         self.model: Optional[NiceCXNetwork] = None  # Save the model here
-        self.no_nodes: bool = False
         self.network_attributes = {
             "networkType": "pathway",
             "GO ID": identifier,
@@ -60,7 +59,6 @@ class GoNetworkAssembler:
             "mechanistic interactions between genes/proteins that are "
             "associated with this GO process.",
         }
-        self.assembled_stmts: List[Statement] = []
 
     def _add_edge(self):
         pass
