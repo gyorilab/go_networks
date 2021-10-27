@@ -13,11 +13,12 @@ from indra.databases import hgnc_client
 logger = logging.getLogger(__name__)
 
 context_prefixes = {
+    'hgnc': 'https://identifiers.org/hgnc:',
     'hgnc.symbol': 'https://identifiers.org/hgnc.symbol:',
     'pubmed': 'https://identifiers.org/pubmed:',
     'uniprot': 'http://identifiers.org/uniprot:',
     'ncbigene': 'http://identifiers.org/ncbigene:',
-    'mesh': 'http://identifiers.org/mesh:'
+    'mesh': 'https://identifiers.org/mesh:',
 }
 
 
@@ -33,7 +34,7 @@ def get_aliases(gene_name):
 
 def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
     parts = []
-    for stmt_type, cnt in ev_counts.items():
+    for stmt_type, cnt in sorted(ev_counts.items(), lambda x: x[1], reverse=True):
         if directed:
             url = f'https://db.indra.bio/statements/from_agents?' \
                 f'subject={source}&object={target}&type={stmt_type}&format=html'
