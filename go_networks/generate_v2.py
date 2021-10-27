@@ -9,6 +9,8 @@ from itertools import combinations
 from pathlib import Path
 from typing import Optional, Dict, Set, Tuple, List, Union
 
+import ndex2.client
+from ndex2 import create_nice_cx_from_server
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -225,7 +227,7 @@ def build_networks(go2genes_map: Go2Genes,
             pair_properties=prop_dict,
         )
         gna.assemble()
-        networks[go_id] = gna
+        networks[go_id] = gna.network
     return networks
 
 
@@ -274,8 +276,39 @@ def generate(sif_file: Optional[str] = None, props_file: Optional[str] = None):
     return build_networks(go2genes_map, sif_props)
 
 
+def format_and_upload_network(ncx, network_set_id, style_ncx,
+                              **ndex_args):
+    """Take a NiceCXNetwork and upload it to NDEx."""
+    ncx.apply_style_from_network(style_ncx)
+    network_url = ncx.upload_to(**ndex_args)
+    network_id = network_url.split('/')[-1]
+    nd = ndex2.client.Ndex2(**{(k if k != 'server' else 'host'): v
+                               for k, v in ndex_args.items()})
+    nd.make_network_public(network_id)
+    nd.add_networks_to_networkset(network_set_id, [network_id])
+    return network_id
+
+
 if __name__ == "__main__":
     # Todo: allow local file to be passed
-    networks = generate(LOCAL_SIF, PROPS_FILE)
-    with open(NETWORKS_FILE, 'wb') as f:
-        pickle.dump(networks, f)
+    if Path(NETWORKS_FILE).exists():
+        with open(NETWORKS_FILE, 'rb') as fh:
+            networks = pickle.load(fh)
+    else:
+        with open(NETWORKS_FILE, 'wb') as f:
+            networks = generate(LOCAL_SIF, PROPS_FILE)
+            pickle.dump(networks, f)
+
+    network_set_id = 'd4b51854-0b2b-11ec-b666-0ac135e8bacf'
+    style_network_id = '8e503fda-7110-11e9-b14c-0660b7976219'
+    style_ncx = create_nice_cx_from_server(
+        server='http://test.ndexbio.org',
+        uuid=style_network_id)
+    from indra.databases import ndex_client
+    username, password = ndex_client.get_default_ndex_cred(ndex_cred=None)
+    ndex_args = {'server': 'http://public.ndexbio.org',
+                 'username': username,
+                 'password': password}
+    for go_id, network in tqdm(networks.items()):
+        network_id = format_and_upload_network(network, network_set_id,
+                                               style_ncx, **ndex_args)

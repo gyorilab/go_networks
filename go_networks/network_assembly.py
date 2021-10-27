@@ -39,7 +39,7 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
         else:
             url = f'https://db.indra.bio/statements/from_agents?' \
                 f'agent0={source}&agent1={target}&type={stmt_type}&format=html'
-        part = f'{stmt_type}(<a href="{url}">{cnt}</a>)'
+        part = f'{stmt_type}(<a href="{url}" target="_blank">{cnt}</a>)'
         parts.append(part)
     return parts
 
@@ -110,6 +110,10 @@ class GoNetworkAssembler:
                                             name='aliases',
                                             values=aliases,
                                             type='list_of_string')
+            self.network.add_node_attribute(property_of=node_id,
+                                            name='type',
+                                            values='protein',
+                                            type='string')
         for (source, target), (forward, reverse, undirected) \
                 in self.pair_properties.items():
             edge_id = self.network.create_edge(node_keys[source],
