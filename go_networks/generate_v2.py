@@ -35,6 +35,7 @@ GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
 LOCAL_SIF = '/Users/ben/.data/indra/db/sif.pkl'
 PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
+NETWORKS_FILE = HERE.joinpath("networks.pkl").absolute().as_posix()
 
 min_gene_count = 5
 max_gene_count = 200
@@ -275,4 +276,6 @@ def generate(sif_file: Optional[str] = None, props_file: Optional[str] = None):
 
 if __name__ == "__main__":
     # Todo: allow local file to be passed
-    generate(LOCAL_SIF, PROPS_FILE)
+    networks = generate(LOCAL_SIF, PROPS_FILE)
+    with open(NETWORKS_FILE, 'wb') as f:
+        pickle.dump(networks, f)

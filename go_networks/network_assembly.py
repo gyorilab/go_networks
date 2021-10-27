@@ -1,33 +1,47 @@
+import json
 import logging
 from typing import List, Dict, Optional
 
 from ndex2 import NiceCXNetwork
 
 from indra.ontology.bio import bio_ontology
-from indra.preassembler import Preassembler
-from indra.preassembler.custom_preassembly import agents_stmt_type_matches
-from indra.statements import Statement
-from indra.assemblers.cx import NiceCxAssembler
-import indra.tools.assemble_corpus as ac
-from go_networks.data_models import PairProperty
-from indra_db.client import get_curations
+from indra.databases import identifiers
+from indra.ontology.standardize import standardize_db_refs
+from indra.databases import hgnc_client
 
 
-# Derived types
-DbRefs = Dict[str, str]
+logger = logging.getLogger(__name__)
+
+context_prefixes = {
+    'hgnc.symbol': 'https://identifiers.org/hgnc.symbol:',
+    'pubmed': 'https://identifiers.org/pubmed:',
+    'uniprot': 'http://identifiers.org/uniprot:',
+    'ncbigene': 'http://identifiers.org/ncbigene:',
+    'mesh': 'http://identifiers.org/mesh:'
+}
+
+def get_aliases(gene_name):
+    hgnc_id = hgnc_client.get_hgnc_id(gene_name)
+    db_refs = standardize_db_refs({'HGNC': hgnc_id})
+    curies = [
+        f'{identifiers.get_identifiers_ns(db_ns)}:{db_id}'
+        for db_ns, db_id in db_refs.items()
+    ]
+    return curies
 
 
-logger = logging.getLogger(__file__)
-try:
-    CURATIONS = get_curations()
-except Exception as exc:
-    logger.warning("Error trying to get curations")
-    logger.warning(exc)
-    CURATIONS = []
-
-
-class CxNoNodes(Exception):
-    """Raised for no nodes in graph"""
+def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
+    parts = []
+    for stmt_type, cnt in ev_counts.items():
+        if directed:
+            url = f'https://db.indra.bio/statements/from_agents?' \
+                f'subject={source}&object={target}&type={stmt_type}&format=html'
+        else:
+            url = f'https://db.indra.bio/statements/from_agents?' \
+                f'agent0={source}&agent1={target}&type={stmt_type}&format=html'
+        part = f'{stmt_type}(<a href="{url}">{cnt}</a>)'
+        parts.append(part)
+    return parts
 
 
 class GoNetworkAssembler:
@@ -42,16 +56,14 @@ class GoNetworkAssembler:
         self.identifier = identifier
         self.entity_list = entity_list
         self.pair_properties = pair_properties
-        # Filled out during cx assembly
-        self.entity_lookup: Dict[str, DbRefs] = {}
-        self.model: Optional[NiceCXNetwork] = None  # Save the model here
+        self.go_name = bio_ontology.get_name('GO', identifier)
         self.network_attributes = {
             "networkType": "pathway",
             "GO ID": identifier,
             "GO hierarchy": "biological process",
             "Prov:wasGeneratedBy": "INDRA",
             "Organism": "Homo sapiens (Human)",
-            "Description": bio_ontology.get_name('GO', identifier),
+            "Description": self.go_name,
             "Methods": "This network was assembled automatically by INDRA "
             "(http://indra.bio) by processing all available biomedical "
             "literature with multiple machine reading systems, and "
@@ -59,110 +71,6 @@ class GoNetworkAssembler:
             "mechanistic interactions between genes/proteins that are "
             "associated with this GO process.",
         }
-
-    def _add_edge(self):
-        pass
-
-    def _stmt_assembly(self):
-        stmts = []
-        # Get all statements from pair properties
-        for pair_prop in self._pp.values():
-            stmts.extend(pair_prop.statements.directed.values())
-            for cplx_stmts in pair_prop.statements.undirected.values():
-                stmts.extend(cplx_stmts)
-
-        stmts = filter_out_medscan(stmts)
-
-        stmts = ac.filter_gene_list(stmts, self.entity_list, policy="all")
-        pa = Preassembler(
-            bio_ontology, stmts=stmts, matches_fun=agents_stmt_type_matches
-        )
-        stmts = pa.combine_duplicates()
-        if CURATIONS:
-            logger.info("Filtering by curations")
-            stmts = ac.filter_by_curation(stmts, curations=CURATIONS)
-        self.assembled_stmts = stmts
-
-        # Run entity lookup now that statements are assembled
-        self._set_entity_lookup()
-
-    def _cx_assembly(self):
-        # assemble cx network
-        logger.info("Assembling CX model")
-        ca = NiceCxAssembler(
-            self.assembled_stmts, f"{self.identifier} ({self.identifier_description})"
-        )
-        ncx = ca.make_model(
-            self_loops=False, network_attributes=self.network_attributes
-        )
-        self.model = ncx
-        if not ncx.nodes:
-            self.no_nodes = True
-            raise CxNoNodes(
-                f"No nodes in CxNetwork for {self.namespace}:{self.identifier}"
-            )
-
-    def _add_metadata(self):
-        # Loop edges and add edge and node meta data
-        nodes_set = set()
-        for e in self.model.edges:
-            # Set node meta data
-            source = self.model.edges[e]["s"]
-            if source not in nodes_set:
-                self._add_node_metadata(source)
-                nodes_set.add(source)
-
-            target = self.model.edges[e]["t"]
-            if target not in nodes_set:
-                self._add_node_metadata(target)
-                nodes_set.add(target)
-
-            # Set edge metadata
-            self._add_edge_metadata(e, source, target)
-
-    def _add_node_metadata(self, node):
-        node_name = self.model.nodes[node]["n"]
-        db_refs = self.entity_lookup.get(node_name)
-        if db_refs is None:
-            logger.warning(f"No DB refs for node {node_name}")
-            return
-        db_refs_list = [_format_entities(ns, _id) for ns, _id in db_refs.items()]
-        self.model.set_node_attribute(node, "DB refs", db_refs_list)
-
-    def _add_edge_metadata(self, edge, source, target):
-        # ToDo:
-        #  Add meta data from pair properties
-        #  Get and add sentence from a top ranked statements of the edge
-        #  Figure out most specific edge label
-        #  - interacts with (undirected)
-        #    - affects (for directed statements)
-        #      - up/downregulates (for signed-like stmt types)
-        #        - stmt type (for specific statements types)
-        source_name = (self.model.get_node(source) or {}).get("n")
-        target_name = (self.model.get_node(target) or {}).get("n")
-        if source_name is None or target_name is None:
-            logger.warning(f"Could not get node ids for edge {edge}")
-            return
-        pair = f"{source_name}|{target_name}"
-        rev_pair = f"{target_name}|{source_name}"
-        # The edges in the model are from the statements contained in the
-        # associated PairProperties, so should not get KeyError here
-        try:
-            for key, value in (
-                self._pp[pair].dict(exclude={"a", "b", "statements"}).items()
-            ):
-                self.model.set_edge_attribute(edge, key, value)
-        # Can happen with Complex
-        except KeyError:
-            try:
-                for key, value in (
-                    self._pp[rev_pair].dict(exclude={"a", "b", "statements"}).items()
-                ):
-                    self.model.set_edge_attribute(edge, key, value)
-            except KeyError:
-                logger.warning(f"Could not set edge attributes for {pair} "
-                               f"or {rev_pair}")
-                return
 
     def assemble(self):
         """Assemble cx network
@@ -184,60 +92,47 @@ class GoNetworkAssembler:
             - Make these as specific as possible, the least specific being
               "A (interacts with) B"
         """
-        if self.no_nodes:
-            print("Model contains no nodes")
-            return
+        name = f"{self.identifier} ({self.go_name})"
+        self.network = NiceCXNetwork()
+        self.network.set_network_attribute('name', name)
+        self.network.set_network_attribute('@context',
+            json.dumps(context_prefixes))
+        for k, v in self.network_attributes.items():
+            self.network.set_network_attribute(k, v, 'string')
 
-        if self.model is not None:
-            print("Model is already assembled!")
-            return
-
-        if not self.assembled_stmts:
-            logger.info("Running statement preassembly")
-            self._stmt_assembly()
-
-        # Assemble cx graph
-        self._cx_assembly()
-
-        # Set meta-data
-        self._add_metadata()
-
-        # Apply Layout after creation - see format_and_upload_network()
-        pass
-
-    def _set_entity_lookup(self):
-        # If already set, return
-        if self.entity_lookup:
-            return
-
-        # Loop agents of statements and create an agent lookup
-        for stmt in self.assembled_stmts:
-            for ag in stmt.agent_list():
-                if ag.name not in self.entity_lookup:
-                    self.entity_lookup[ag.name] = ag.db_refs
-                elif set(self.entity_lookup[ag.name]).symmetric_difference_update(
-                    ag.db_refs
-                ):
-                    self.entity_lookup[ag.name].update(ag.db_refs)
-
-
-def filter_out_medscan(stmts: List[Statement]) -> List[Statement]:
-    logger.info(f"Filtering out medscan evidence on {len(stmts)} statements")
-    filtered_stmts = []
-    for stmt in stmts:
-        new_evidence = [e for e in stmt.evidence if e.source_api != "medscan"]
-        if not new_evidence:
-            continue
-        stmt.evidence = new_evidence
-        if not stmt.evidence:
-            continue
-        filtered_stmts.append(stmt)
-    logger.info("%d statements after filter" % len(filtered_stmts))
-    return filtered_stmts
-
-
-def _format_entities(db_name: str, db_id: str) -> str:
-    if ':' in db_id:
-        return db_id
-    else:
-        return f"{db_name}:{db_id}"
+        node_keys = {}
+        for gene in self.entity_list:
+            node_id = self.network.create_node(gene,
+                node_represents=f'hgnc.symbol:{gene}')
+            node_keys[gene] = node_id
+            aliases = get_aliases(gene)
+            self.network.add_node_attribute(property_of=node_id,
+                                            name='aliases',
+                                            values=aliases,
+                                            type='list_of_string')
+        for (source, target), (forward, reverse, undirected) \
+                in self.pair_properties.items():
+            edge_id = self.network.create_edge(node_keys[source],
+                                               node_keys[target],
+                                               'interacts with')
+            self.network.add_edge_attribute(edge_id, 'directed',
+                                            True if forward else False,
+                                            'boolean')
+            self.network.add_edge_attribute(edge_id, 'reverse directed',
+                                            True if reverse else False,
+                                            'boolean')
+            if forward:
+                self.network.add_edge_attribute(edge_id, 'SOURCE => TARGET',
+                    edge_attribute_from_ev_counts(source, target, forward,
+                                                 True),
+                    'list_of_string')
+            if reverse:
+                self.network.add_edge_attribute(edge_id, 'TARGET => SOURCE',
+                    edge_attribute_from_ev_counts(target, source, reverse,
+                                                  True),
+                    'list_of_string')
+            if undirected:
+                self.network.add_edge_attribute(edge_id, 'SOURCE - TARGET',
+                    edge_attribute_from_ev_counts(source, target, undirected,
+                                                  False),
+                    'list_of_string')
