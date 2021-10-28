@@ -47,11 +47,14 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
     return parts
 
 
-def _get_cx_layout(network: NiceCXNetwork):
+def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500) -> Dict:
     # Convert to networkx graph
     g = network.to_networkx()
     # Get layout
     pos = layout.kamada_kawai_layout(g)
+    if scale_factor != 1.0:
+        pos = {node: [x * scale_factor, y * scale_factor]
+               for node, (x, y) in pos.items()}
     return pos
 
 
