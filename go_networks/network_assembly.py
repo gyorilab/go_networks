@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import List, Dict
+from networkx.drawing import layout
 
 from ndex2 import NiceCXNetwork
 
@@ -44,6 +45,14 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
         part = f'{stmt_type}(<a href="{url}" target="_blank">{cnt}</a>)'
         parts.append(part)
     return parts
+
+
+def _get_cx_layout(network: NiceCXNetwork):
+    # Convert to networkx graph
+    g = network.to_networkx()
+    # Get layout
+    pos = layout.kamada_kawai_layout(g)
+    return pos
 
 
 class GoNetworkAssembler:
