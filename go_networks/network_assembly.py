@@ -151,3 +151,15 @@ class GoNetworkAssembler:
                     edge_attribute_from_ev_counts(source, target, undirected,
                                                   False),
                     'list_of_string')
+
+        # Get layout by name now that the network is built
+        node_layout_by_name = _get_cx_layout(self.network)
+
+        # Loop the entities again to add coordinates for each node
+        layout_aspect = []
+        for gene in self.entity_list:
+            x, y = node_layout_by_name[gene]
+            node_id = node_keys[gene]
+            layout_aspect.append({'node': node_id, 'x': x, 'y': y})
+
+        self.network.add_opaque_aspect('cartesianLayout', layout_aspect)
