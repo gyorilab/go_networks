@@ -51,10 +51,7 @@ def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500) -> Dict:
     # Convert to networkx graph
     g = network.to_networkx()
     # Get layout
-    pos = layout.kamada_kawai_layout(g)
-    if scale_factor != 1.0:
-        pos = {node: [x * scale_factor, y * scale_factor]
-               for node, (x, y) in pos.items()}
+    pos = layout.kamada_kawai_layout(g, scale=scale_factor)
     return pos
 
 
