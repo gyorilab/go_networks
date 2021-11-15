@@ -42,7 +42,7 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
         else:
             url = f'https://db.indra.bio/statements/from_agents?' \
                 f'agent0={source}&agent1={target}&type={stmt_type}&format=html'
-        part = f'{stmt_type}(<a href="{url}" target="_blank">{cnt}</a>)'
+        part = f'{stmt_type}(<a href="{url}" target="_blank">View {cnt} statements</a>)'
         parts.append(part)
     return parts
 
