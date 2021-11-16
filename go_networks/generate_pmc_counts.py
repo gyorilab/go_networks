@@ -1,11 +1,12 @@
 """
 Batch read text_refs.tsv and statements.tsv to align PMC IDs with evidence
-counts
+counts and output the results to a new file.
 """
 from pathlib import Path
 import json
 import logging
 from indra.statements import Statement
+from tqdm import tqdm
 import codecs
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ def generate_reading_pmc_mapping(text_refs_tsv):
     pmc_map = {}
 
     # Open tsv file and save mapping to pmc_map_file
+    logger.info('Generating reading id -> pmc map from text_refs.tsv')
     with tsv_path.open('r') as fi:
         line = fi.readline()
         while line:
@@ -41,7 +43,7 @@ def load_statement_tsv_to_dict(stmts_tsv, ignore_ungrounded=True,
     stmts_path = Path(stmts_tsv) if isinstance(stmts_tsv, str) else stmts_tsv
     reading_counts = {}
 
-    # Open tsv file and save statements to evidence_counts_tsv
+    logger.info('Generating reading id -> ev count dict')
     with stmts_path.open('r') as fi:
         line = fi.readline()
         while line:
@@ -84,3 +86,36 @@ def load_statement_tsv_to_dict(stmts_tsv, ignore_ungrounded=True,
             line = fi.readline()
 
     return reading_counts
+
+
+def main(text_refs_tsv, stmts_tsv, pmc_map_file, ignore_ungrounded=True,
+         ignore_sources=None):
+    pmc_map = generate_reading_pmc_mapping(text_refs_tsv)
+    reading_counts = load_statement_tsv_to_dict(stmts_tsv, ignore_ungrounded,
+                                                ignore_sources)
+
+    logger.info('Writing pmc_map to %s' % pmc_map_file)
+    # Write to pmc_map_file
+    with open(pmc_map_file, 'w') as fo:
+        for reading_id, count in tqdm(reading_counts.items(), total=len(reading_counts)):
+            try:
+                pmc_id = pmc_map[reading_id]
+                fo.write(f'{pmc_id}\t{count}\n')
+            except KeyError:
+                continue
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('text_refs_tsv', help='Path to text_refs.tsv')
+    parser.add_argument('stmts_tsv', help='Path to statements.tsv')
+    parser.add_argument('pmc_map_file', help='Path to output file')
+    parser.add_argument('--ignore-ungrounded', action='store_true',
+                        help='Ignore ungrounded statements')
+    parser.add_argument('--ignore-sources', nargs='+',
+                        help='Ignore statements from these sources')
+    args = parser.parse_args()
+    main(args.text_refs_tsv, args.stmts_tsv, args.pmc_map_file,
+         ignore_ungrounded=args.ignore_ungrounded,
+         ignore_sources=args.ignore_sources)
