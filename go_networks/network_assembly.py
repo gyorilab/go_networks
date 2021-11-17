@@ -50,7 +50,17 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
 
 
 def _detangle_layout(g: nx.Graph,
-                     pos: Dict[str, List[float]]) -> None:
+                     pos: Dict[str, List[float]]):
+    # Find the nodes that are disconnected from the rest of the graph
+    disconnected_nodes = []
+    for node in pos:
+        if nx.degree(g, node) == 0:
+            disconnected_nodes.append(node)
+
+    # If there are no disconnected nodes, return
+    if not disconnected_nodes:
+        return
+
     # Find min and max x and y values as well as the distance between them
     y_max = max(pos.values(), key=lambda x: x[1])[1]
     y_min = min(pos.values(), key=lambda x: x[1])[1]
@@ -59,12 +69,6 @@ def _detangle_layout(g: nx.Graph,
     x_max = max(pos.values(), key=lambda x: x[0])[0]
     x_min = min(pos.values(), key=lambda x: x[0])[0]
     x_dist = x_max - x_min
-
-    # Find the nodes that are disconnected from the rest of the graph
-    disconnected_nodes = []
-    for node in pos:
-        if nx.degree(g, node) == 0:
-            disconnected_nodes.append(node)
 
     # Move the disconnected nodes to below the graph at 10 % of the
     # y-distance, then set the x position linearly from the min to max with
