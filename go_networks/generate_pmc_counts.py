@@ -92,8 +92,9 @@ def main(text_refs_tsv, stmts_tsv, pmc_map_file, ignore_ungrounded=True,
 
     # Aggregate counts per PMC ID: PMC ID -> reading_id is a one to many
     # mapping
+    logger.info('Aggregating counts per PMC ID')
     pmc_counts = {}
-    for reading_id, count in reading_counts.items():
+    for reading_id, count in tqdm(reading_counts.items(), total=len(reading_counts)):
         pmc_id = pmc_map[reading_id]
         try:
             pmc_counts[pmc_id] += count
