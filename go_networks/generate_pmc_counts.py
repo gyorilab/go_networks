@@ -55,16 +55,11 @@ def load_statement_tsv_to_dict(stmts_tsv, ignore_ungrounded=True,
                 line = fi.readline()
                 continue
 
-            try:
-                raw_json = ll[3]
-                esc_json = codecs.escape_decode(
-                    codecs.escape_decode(raw_json)[0].decode()
-                )[0].decode()
-                stmt = Statement._from_json(json.loads(esc_json))
-            except json.JSONDecodeError as e:
-                print(f'Could not parse JSON for {reading_id}: {e}')
-                line = fi.readline()
-                continue
+            raw_json = ll[3]
+            esc_json = codecs.escape_decode(
+                codecs.escape_decode(raw_json)[0].decode()
+            )[0].decode()
+            stmt = Statement._from_json(json.loads(esc_json))
 
             # Check grounded if requested
             if ignore_ungrounded and \
