@@ -90,12 +90,21 @@ def main(text_refs_tsv, stmts_tsv, pmc_map_file, ignore_ungrounded=True,
                                                      ignore_ungrounded,
                                                      ignore_sources)
 
-    logger.info('Writing pmc_map to %s' % pmc_map_file)
+    # Aggregate counts per PMC ID: PMC ID -> reading_id is a one to many
+    # mapping
+    pmc_counts = {}
+    for reading_id, count in reading_counts.items():
+        pmc_id = pmc_map[reading_id]
+        try:
+            pmc_counts[pmc_id] += count
+        except KeyError:
+            pmc_counts[pmc_id] = count
+
     # Write to pmc_map_file
+    logger.info('Writing pmc_map to %s' % pmc_map_file)
     with open(pmc_map_file, 'w') as fo:
-        for reading_id, count in tqdm(reading_counts.items(), total=len(reading_counts)):
+        for pmc_id, count in tqdm(pmc_counts.items(), total=len(pmc_counts)):
             try:
-                pmc_id = pmc_map[reading_id]
                 fo.write(f'{pmc_id}\t{count}\n')
             except KeyError:
                 continue
