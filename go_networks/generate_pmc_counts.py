@@ -74,7 +74,7 @@ def load_statement_tsv_to_dict(stmts_tsv, ignore_ungrounded=True,
                 continue
 
             try:
-                reading_counts[reading_id] += 1
+                reading_counts[reading_id] += len(stmt.evidence)
             except KeyError:
                 reading_counts[reading_id] = len(stmt.evidence)
 
