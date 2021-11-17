@@ -69,14 +69,22 @@ def statement_tsv_to_reading_counts(stmts_tsv, ignore_ungrounded=True,
                 continue
 
             # Ignore sources if given
-            if ignore_sources and stmt.evidence[0].source_api in ignore_sources:
-                line = fi.readline()
-                continue
+            if ignore_sources:
+                count = 0
+                for ev in stmt.evidence:
+                    if ev.source_api not in ignore_sources:
+                        count += 1
+                if count == 0:
+                    line = fi.readline()
+                    continue
+
+            else:
+                count = len(stmt.evidence)
 
             try:
-                reading_counts[reading_id] += len(stmt.evidence)
+                reading_counts[reading_id] += count
             except KeyError:
-                reading_counts[reading_id] = len(stmt.evidence)
+                reading_counts[reading_id] = count
 
             line = fi.readline()
 
