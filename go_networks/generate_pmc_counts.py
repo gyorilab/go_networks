@@ -38,8 +38,8 @@ def generate_reading_pmc_mapping(text_refs_tsv):
     return pmc_map
 
 
-def load_statement_tsv_to_dict(stmts_tsv, ignore_ungrounded=True,
-                               ignore_sources=None):
+def statement_tsv_to_reading_counts(stmts_tsv, ignore_ungrounded=True,
+                                    ignore_sources=None):
     stmts_path = Path(stmts_tsv) if isinstance(stmts_tsv, str) else stmts_tsv
     reading_counts = {}
 
@@ -86,8 +86,9 @@ def load_statement_tsv_to_dict(stmts_tsv, ignore_ungrounded=True,
 def main(text_refs_tsv, stmts_tsv, pmc_map_file, ignore_ungrounded=True,
          ignore_sources=None):
     pmc_map = generate_reading_pmc_mapping(text_refs_tsv)
-    reading_counts = load_statement_tsv_to_dict(stmts_tsv, ignore_ungrounded,
-                                                ignore_sources)
+    reading_counts = statement_tsv_to_reading_counts(stmts_tsv,
+                                                     ignore_ungrounded,
+                                                     ignore_sources)
 
     logger.info('Writing pmc_map to %s' % pmc_map_file)
     # Write to pmc_map_file
