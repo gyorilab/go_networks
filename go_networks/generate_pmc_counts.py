@@ -103,11 +103,12 @@ def main(text_refs_tsv, stmts_tsv, pmc_map_file, ignore_ungrounded=True,
     logger.info('Aggregating counts per PMC ID')
     pmc_counts = {}
     for reading_id, count in tqdm(reading_counts.items(), total=len(reading_counts)):
-        pmc_id = pmc_map[reading_id]
-        try:
-            pmc_counts[pmc_id] += count
-        except KeyError:
-            pmc_counts[pmc_id] = count
+        pmc_id = pmc_map.get(reading_id)
+        if pmc_id is not None:
+            try:
+                pmc_counts[pmc_id] += count
+            except KeyError:
+                pmc_counts[pmc_id] = count
 
     # Write to pmc_map_file
     logger.info('Writing pmc_map to %s' % pmc_map_file)
