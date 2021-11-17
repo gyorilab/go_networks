@@ -1,6 +1,8 @@
 import json
 import logging
 from typing import List, Dict
+
+import networkx as nx
 from networkx.drawing import layout
 
 from ndex2 import NiceCXNetwork
@@ -47,11 +49,41 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
     return parts
 
 
-def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500) -> Dict:
+def _detangle_layout(g: nx.Graph,
+                     pos: Dict[str, List[float]]) -> None:
+    # Find min and max x and y values as well as the distance between them
+    y_max = max(pos.values(), key=lambda x: x[1])[1]
+    y_min = min(pos.values(), key=lambda x: x[1])[1]
+    y_dist = y_max - y_min
+
+    x_max = max(pos.values(), key=lambda x: x[0])[0]
+    x_min = min(pos.values(), key=lambda x: x[0])[0]
+    x_dist = x_max - x_min
+
+    # Find the nodes that are disconnected from the rest of the graph
+    disconnected_nodes = []
+    for node in pos:
+        if nx.degree(g, node) == 0:
+            disconnected_nodes.append(node)
+
+    # Move the disconnected nodes to below the graph at 10 % of the
+    # y-distance, then set the x position linearly from the min to max with
+    # no more than 10 nodes per row with 10 % of the y-distance between rows
+    for n, node in enumerate(disconnected_nodes):
+        pos[node][1] = y_min - 0.1 * y_dist - ((n//10) % 10) * 0.1 * y_dist
+        pos[node][0] = x_min + ((n % 10) + 0.5) * x_dist / 10
+
+
+def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500,
+                   detangle: bool = True) -> Dict:
     # Convert to networkx graph
     g = network.to_networkx()
     # Get layout
     pos = layout.kamada_kawai_layout(g, scale=scale_factor)
+
+    # Detangle nodes
+    if detangle:
+        _detangle_layout(g, pos)
     return pos
 
 
