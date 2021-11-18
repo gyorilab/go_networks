@@ -46,8 +46,8 @@ from gzip import decompress
 logger = logging.getLogger(__name__)
 
 
-def pmc_xml_to_csv(out_path):
-    """Get PMC XML from the DB and extract metadata
+def reading_xml_to_csv(out_path):
+    """Get XML content from the DB and save to CSV
 
     The text_content table has the following columns (copied from
     indra_db/schemas/principal_schema.py):
@@ -105,7 +105,7 @@ def pmc_xml_to_csv(out_path):
 
 
 def text_ref_id_pmc_id_dump(out_path):
-    """Get text_ref_id and pmcid from the DB
+    """Get text_ref_id-pmcid pairs from the DB
 
     The text_ref table has the following columns (copied from
     indra_db/schemas/principal_schema.py):
