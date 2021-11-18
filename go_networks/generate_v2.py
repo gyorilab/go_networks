@@ -33,7 +33,6 @@ NameEntityMap = Dict[str, Tuple[str, str]]
 HERE = Path(__file__).absolute().parent.parent
 GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
-LOCAL_SIF = '/Users/ben/.data/indra/db/sif.pkl'
 PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
 NETWORKS_FILE = HERE.joinpath("networks.pkl").absolute().as_posix()
 
@@ -307,8 +306,8 @@ if __name__ == "__main__":
         with open(NETWORKS_FILE, 'rb') as fh:
             networks = pickle.load(fh)
     else:
+        networks = generate(args.local_sif, PROPS_FILE)
         with open(NETWORKS_FILE, 'wb') as f:
-            networks = generate(LOCAL_SIF, PROPS_FILE)
             pickle.dump(networks, f)
 
     style_ncx = create_nice_cx_from_server(
