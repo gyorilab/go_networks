@@ -299,12 +299,12 @@ if __name__ == "__main__":
                         help='Network ID of the style network',
                         default='8e503fda-7110-11e9-b14c-0660b7976219')
     parser.add_argument('--regenerate', action='store_true',
-                        help='Regenerate the network set')
+                        help='Regenerate the networks and re-cache them')
     args = parser.parse_args()
     logger.info(f"Using network set id {args.network_set}")
     logger.info(f"Using network style {args.style_network}")
 
-    if Path(NETWORKS_FILE).exists():
+    if Path(NETWORKS_FILE).exists() and not args.regenerate:
         with open(NETWORKS_FILE, 'rb') as fh:
             networks = pickle.load(fh)
     else:
