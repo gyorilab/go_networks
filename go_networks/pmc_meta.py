@@ -37,6 +37,9 @@ For what I have done in the past, I have just taken the first entries
 """
 import codecs
 import logging
+
+from lxml import etree
+
 from indra_db_lite.construction import query_to_csv
 from gzip import decompress
 
@@ -108,3 +111,73 @@ def hex_bin_to_str(raw_hex_bin: str) -> str:
     # two characters are escaping the hex-encoding: '\\x1f8b0808......'
     hex_str = decode_hex(raw_hex_bin[2:])[0]
     return decompress(hex_str).decode()
+
+
+def extract_info_from_pmc_xml(xml_str: str) -> dict:
+    """Extract metadata from PMC XML
+
+    * journal
+    * article
+    * email
+    * corresponding_author (as Boolean)
+    * year
+
+    Parameters
+    ----------
+    xml_str :
+        PMC XML as a string
+
+    Returns
+    -------
+    :
+    """
+    tree = etree.fromstring(xml_str)
+
+    # Authors
+    def _extract_authors(root):
+        authors = root.xpath(".//contrib[@contrib-type='author']")
+        author_dict = {}
+
+        # Loop authors and extract info per author
+        for author in authors:
+            ad = {}
+            # Last name
+            ad['last_name'] = author.xpath(".//surname")[0].text
+            # First name
+            ad['first_name'] = author.xpath(".//given-names")[0].text
+            # Email
+            ad['email'] = author.xpath(".//email")[0].text
+            # Corresponding author
+            ad['corresponding_author'] = author.attrib.get('corresp', 'no') == 'yes'
+            author_dict[author.attrib.get('id')] = ad
+        return author_dict
+
+    # Author info
+    author_dict = _extract_authors(tree)
+
+    # Get corresponding author email from the author info dict
+    for k, v in author_dict.items():
+        if v['corresponding_author']:
+            corresponding_author_email = v['email']
+            break
+    else:
+        corresponding_author_email = None
+
+    # Journal name
+    journal = tree.xpath(".//journal-title")[0].text
+
+    # Article title
+    # FixMe: sometimes the title and the abstract are extracted to the
+    #  article-title tag
+    article_title = tree.xpath(".//article-title")[0].text
+
+    # Year
+    year = tree.xpath(".//pub-date[@pub-type='epub']")[0].xpath(".//year")[0].text
+
+    return {
+        'journal': journal,
+        'article_title': article_title,
+        'corresponding_author_email': corresponding_author_email,
+        'year': year,
+        'corresponding_author': corresponding_author_email is not None,
+    }
