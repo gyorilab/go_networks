@@ -37,7 +37,7 @@ def get_aliases(gene_name):
 
 def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
     parts = []
-    for stmt_type, cnt in sorted(ev_counts.items(), lambda x: x[1], reverse=True):
+    for stmt_type, cnt in sorted(ev_counts.items(), key=lambda x: x[1], reverse=True):
         if directed:
             url = f'https://db.indra.bio/statements/from_agents?' \
                 f'subject={source}&object={target}&type={stmt_type}&format=html'
