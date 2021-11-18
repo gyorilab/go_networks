@@ -301,6 +301,8 @@ if __name__ == "__main__":
     parser.add_argument('--regenerate', action='store_true',
                         help='Regenerate the network set')
     args = parser.parse_args()
+    logger.info(f"Using network set id {args.network_set}")
+    logger.info(f"Using network style {args.style_network}")
 
     if Path(NETWORKS_FILE).exists():
         with open(NETWORKS_FILE, 'rb') as fh:
