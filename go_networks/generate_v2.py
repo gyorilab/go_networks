@@ -1,6 +1,7 @@
 """
-Generate GO Networks
+Generate GO Networks from a list of GO terms and the Sif dump.
 """
+import argparse
 from collections import defaultdict
 import logging
 import pickle
@@ -287,7 +288,21 @@ def format_and_upload_network(ncx, network_set_id, style_ncx,
 
 
 if __name__ == "__main__":
-    # Todo: allow local file to be passed
+    # Setup argument parser
+    parser = argparse.ArgumentParser(__doc__)
+    parser.add_argument('--local-sif',
+                        help='Local SIF dump file to load. If not provided, '
+                             'the latest SIF dump will be fetched from S3.')
+    parser.add_argument('--network-set',
+                        help='Network set ID to add the new networks to.',
+                        default='bdba6a7a-488a-11ec-b3be-0ac135e8bacf')
+    parser.add_argument('--style-network',
+                        help='Network ID of the style network',
+                        default='8e503fda-7110-11e9-b14c-0660b7976219')
+    parser.add_argument('--regenerate', action='store_true',
+                        help='Regenerate the network set')
+    args = parser.parse_args()
+
     if Path(NETWORKS_FILE).exists():
         with open(NETWORKS_FILE, 'rb') as fh:
             networks = pickle.load(fh)
@@ -296,16 +311,15 @@ if __name__ == "__main__":
             networks = generate(LOCAL_SIF, PROPS_FILE)
             pickle.dump(networks, f)
 
-    network_set_id = 'd4b51854-0b2b-11ec-b666-0ac135e8bacf'
-    style_network_id = '8e503fda-7110-11e9-b14c-0660b7976219'
     style_ncx = create_nice_cx_from_server(
         server='http://test.ndexbio.org',
-        uuid=style_network_id)
+        uuid=args.style_network)
+
     from indra.databases import ndex_client
     username, password = ndex_client.get_default_ndex_cred(ndex_cred=None)
     ndex_args = {'server': 'http://public.ndexbio.org',
                  'username': username,
                  'password': password}
     for go_id, network in tqdm(sorted(networks.items(), key=lambda x: x[0])):
-        network_id = format_and_upload_network(network, network_set_id,
+        network_id = format_and_upload_network(network, args.network_set,
                                                style_ncx, **ndex_args)
