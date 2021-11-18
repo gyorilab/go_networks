@@ -281,8 +281,17 @@ def format_and_upload_network(ncx, network_set_id, style_ncx,
     network_id = network_url.split('/')[-1]
     nd = ndex2.client.Ndex2(**{(k if k != 'server' else 'host'): v
                                for k, v in ndex_args.items()})
-    nd.make_network_public(network_id)
-    nd.add_networks_to_networkset(network_set_id, [network_id])
+    try:
+        nd.make_network_public(network_id)
+    except Exception as e:
+        logger.warning(f"Failed to make network {network_id} public: {e}")
+
+    try:
+        nd.add_networks_to_networkset(network_set_id, [network_id])
+    except Exception as e:
+        logger.warning(f"Failed to add network {network_id} to network set "
+                       f"{network_set_id}: {e}")
+
     return network_id
 
 
