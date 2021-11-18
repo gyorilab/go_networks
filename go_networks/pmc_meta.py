@@ -49,6 +49,36 @@ logger = logging.getLogger(__name__)
 def pmc_xml_to_csv(out_path):
     """Get PMC XML from the DB and extract metadata
 
+    The text_content table has the following columns (copied from
+    indra_db/schemas/principal_schema.py):
+
+    - **id** ``integer PRIMARY KEY``: The auto-generated primary key of
+      the table. These are elsewhere called Text Content IDs, or TCIDs.
+    - **text_ref_id** ``integer NOT NULL``: A foreign-key constrained
+      reference to the appropriate entry in the :func:`text_ref <text_ref>`
+      table.
+    - **source** ``varchar(250) NOT NULL``: The name of the source, e.g.
+      "pubmed" or "pmc_oa". The list of content names can be found in the
+      class attributes in content managers.
+    - **format** ``varchar(250) NOT NULL``: The file format of the
+      content, e.g. "XML" or "TEXT".
+    - **text_type** ``varchar(250) NOT NULL``: The type of the text, e.g.
+      "abstract" of "fulltext".
+    - **preprint** ``boolean``: Indicate whether the content is from
+      a preprint.
+    - **license** [``varchar``]: Record the license that applies to the
+      content.
+    - **content** ``bytea``: The raw compressed bytes of the content.
+
+    **Metadata Columns**
+
+    - **insert_data** ``timestamp without time zone``: The date the record
+      was added.
+    - **last_updated** ``timestamp without time zone``: The most recent
+      time the record was edited.
+
+
+
     Parameters
     ----------
     out_path : str
@@ -76,6 +106,36 @@ def pmc_xml_to_csv(out_path):
 
 def text_ref_id_pmc_id_dump(out_path):
     """Get text_ref_id and pmcid from the DB
+
+    The text_ref table has the following columns (copied from
+    indra_db/schemas/principal_schema.py):
+
+    - **id** ``integer PRIMARY KEY``: The primary key of the TextRef
+      entry. Elsewhere this is often referred to as a "text ref ID" or
+      "trid" for short.
+    - **pmid** ``varchar(20)``: The identifier from pubmed.
+    - **pmcid** ``varchar(20)``: The identifier from PubMed Central (e.g.
+      "PMC12345")
+    - **doi** ``varchar(100)``: The ideally universal identifier.
+    - **pii** ``varchar(250)``: The identifier used by Springer.
+    - **url** ``varchar UNIQUE``: For sources found exclusively online
+      (e.g. wikipedia) use their URL.
+    - **manuscript_id** ``varchar(100) UNIQUE``: The ID assigned documents
+      given to PMC author manuscripts.
+
+    **Metadata Columns**
+
+    In addition we also track some basic metadata about the entry and
+    updates to the data in the table.
+
+    - **create_date** ``timestamp without time zone``: The date the record
+      was added.
+    - **last_updated** ``timestamp without time zone``: The most recent
+      time the record was edited.
+    - **pub_year** ``integer``: The year the article was published, based
+      on the first report we find (in order of PubMed, PMC, then PMC
+      Manuscripts).
+
 
     Parameters
     ----------
