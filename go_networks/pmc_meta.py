@@ -35,8 +35,10 @@ For what I have done in the past, I have just taken the first entries
 
 .//email
 """
+import codecs
 import logging
 from indra_db_lite.construction import query_to_csv
+from gzip import decompress
 
 logger = logging.getLogger(__name__)
 
@@ -86,3 +88,23 @@ def text_ref_id_pmc_id_dump(out_path):
         pmcid IS NOT NULL
     """
     query_to_csv(query, out_path)
+
+
+def hex_bin_to_str(raw_hex_bin: str) -> str:
+    """Convert hex-encoded raw string to string
+
+    Parameters
+    ----------
+    raw_hex_bin :
+        Hex-encoded bytes as a plain string.
+
+    Returns
+    -------
+    str
+        String
+    """
+    decode_hex = codecs.getdecoder("hex_codec")
+    # It's a plain text string containing hex-encoded bytes, so it's first
+    # two characters are escaping the hex-encoding: '\\x1f8b0808......'
+    hex_str = decode_hex(raw_hex_bin[2:])[0]
+    return decompress(hex_str).decode()
