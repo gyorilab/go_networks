@@ -134,41 +134,21 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
     tree = etree.fromstring(xml_str)
 
     # Authors
-    def _extract_authors(root):
+    def _get_corresponding_author(root):
         authors = root.xpath(".//contrib[@contrib-type='author']")
-        author_dict = {}
-
-        # Loop authors and extract info per author
+        # Find the corresponding author and return the email
         for author in authors:
-            ad = {}
-            # Last name
-            ad['last_name'] = author.xpath(".//surname")[0].text
-            # First name
-            ad['first_name'] = author.xpath(".//given-names")[0].text
-            # Email
-            ad['email'] = author.xpath(".//email")[0].text
-            # Corresponding author
-            ad['corresponding_author'] = author.attrib.get('corresp', 'no') == 'yes'
-            author_dict[author.attrib.get('id')] = ad
-        return author_dict
+            if author.attrib.get('corresp', 'no') == 'yes':
+                return author.xpath(".//email")[0].text
 
-    # Author info
-    author_dict = _extract_authors(tree)
-
-    # Get corresponding author email from the author info dict
-    for k, v in author_dict.items():
-        if v['corresponding_author']:
-            corresponding_author_email = v['email']
-            break
-    else:
-        corresponding_author_email = None
+    # Corresponding author
+    email = _get_corresponding_author(tree)
 
     # Journal name
     journal = tree.xpath(".//journal-title")[0].text
 
     # Article title
-    # FixMe: sometimes the title and the abstract are extracted to the
-    #  article-title tag
+    # FixMe: sometimes the title and the abstract are in the article-title tag
     article_title = tree.xpath(".//article-title")[0].text
 
     # Year
@@ -176,8 +156,8 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
 
     return {
         'journal': journal,
-        'article_title': article_title,
-        'corresponding_author_email': corresponding_author_email,
+        'article': article_title,
+        'email': email,
+        'corresponding_author': email is not None,
         'year': year,
-        'corresponding_author': corresponding_author_email is not None,
     }
