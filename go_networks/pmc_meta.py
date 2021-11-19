@@ -181,7 +181,8 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
 
     * journal
     * article
-    * email
+    * email (from corresponding author, or any email if no corresponding
+      author email exists)
     * corresponding_author (as Boolean)
     * year
 
@@ -195,33 +196,48 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
     :
     """
     tree = etree.fromstring(xml_str)
+    corr_author_query = ".//contrib[@contrib-type='author' and @corresp='yes']"
 
-    # Authors
-    def _get_corresponding_author(root):
-        authors = root.xpath(".//contrib[@contrib-type='author']")
-        # Find the corresponding author and return the email
-        for author in authors:
-            if author.attrib.get('corresp', 'no') == 'yes':
-                return author.xpath(".//email")[0].text
+    def _get_email(root):
+        # Get the email of the corresponding author or any email if the
+        # corresponding author doesn't have an email
+        corr_author = root.xpath(corr_author_query)
+        if corr_author and corr_author[0].xpath(".//email"):
+            return corr_author[0].xpath(".//email")[0].text
+        else:
+            any_email = root.xpath(".//email")
+            return (any_email[0].text or None) if any_email else None
+
+    def _get_pub_year(root):
+        pub_years = [y.text for y in
+                     root.xpath(".//pub-date/year")]
+        if pub_years:
+            # Get earliest publication year
+            return min(pub_years)
 
     # Corresponding author
-    email = _get_corresponding_author(tree)
+    corr_auth = tree.xpath(corr_author_query)
+
+    # Get email
+    email = _get_email(tree)
 
     # Journal name
-    journal = tree.xpath(".//journal-title")[0].text
+    journal = (tree.xpath(".//journal-title")[0].text or None) if \
+        tree.xpath(".//journal-title") else None
 
     # Article title
     # FixMe: sometimes the title and the abstract are in the article-title tag
-    article_title = tree.xpath(".//article-title")[0].text
+    article_title = (tree.xpath(".//article-title")[0].text or None) if \
+        tree.xpath(".//article-title") else None
 
     # Year
-    year = tree.xpath(".//pub-date[@pub-type='epub']")[0].xpath(".//year")[0].text
+    year = _get_pub_year(tree)
 
     return {
         'journal': journal,
         'article': article_title,
         'email': email,
-        'corresponding_author': email is not None,
+        'corresponding_author': bool(corr_auth),
         'year': year,
     }
 
