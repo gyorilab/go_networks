@@ -70,7 +70,10 @@ def _detangle_layout(g: nx.Graph,
     x_min = min(pos.values(), key=lambda x: x[0])[0]
     x_dist = x_max - x_min
 
-    # Move the disconnected nodes to below the graph at 10 % of the
+    # Sort the nodes alphabetically, this will group by family
+    disconnected_nodes.sort()
+
+    # Move the disconnected nodes to above the graph at 10 % of the
     # y-distance, then set the x position linearly from the min to max with
     # no more than 10 nodes per row with 10 % of the y-distance between rows
     for n, node in enumerate(disconnected_nodes):
