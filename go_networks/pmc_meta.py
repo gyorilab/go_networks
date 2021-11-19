@@ -35,10 +35,13 @@ For what I have done in the past, I have just taken the first entries
 
 .//email
 """
+import argparse
 import codecs
 import logging
+from pathlib import Path
 
 from lxml import etree
+from tqdm import tqdm
 
 from indra_db_lite.construction import query_to_csv
 from gzip import decompress
@@ -221,3 +224,125 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
         'corresponding_author': email is not None,
         'year': year,
     }
+
+
+def _read_reading_id_pmc_csv(path: str) -> dict:
+    with open(path, 'r') as f:
+        # reading ID -> PMC is a many-to-one mapping
+        rid_pmc_map = {}
+        line = f.readline()
+        while line:
+            rid, pmc = line.strip().split(',')
+            rid_pmc_map[rid] = pmc
+            line = f.readline()
+
+    return rid_pmc_map
+
+
+def _read_reading_xml_csv(path: str) -> dict:
+    with open(path, 'r') as f:
+        rid_xml_map = {}
+        line = f.readline()
+        while line:
+            rid, raw_xml = line.strip().split(',')
+
+            # Convert hex-encoded raw string to string
+            xml_str = hex_bin_to_str(raw_xml)
+
+            # Extract metadata from PMC XML, check that all values are set
+            meta_dict = extract_info_from_pmc_xml(xml_str)
+            if meta_dict['journal'] is None or meta_dict['article'] is None:
+                print(rid)
+            if all(v for v in meta_dict.values()):
+                rid_xml_map[rid] = meta_dict
+
+            line = f.readline()
+
+    return rid_xml_map
+
+
+def main(pmc_reading_id_path: str,
+         reading_xml_path: str,
+         pmc_count_path: str,
+         out_path: str):
+    # Get the PMC count
+    with open(pmc_count_path, 'r') as f:
+        pmc_counts = {}
+        line = f.readline()
+        while line:
+            pmc, count = line.strip().split('\t')
+            pmc_counts[pmc] = int(count)
+            line = f.readline()
+
+    # Get the reading ID -> PMC mapping
+    if not Path(pmc_reading_id_path).exists():
+        text_ref_id_pmc_id_dump(pmc_reading_id_path)
+    rid_pmc_map = _read_reading_id_pmc_csv(pmc_reading_id_path)
+
+    # Get the reading id, XML mapping
+    if not Path(reading_xml_path).exists():
+        reading_xml_to_csv(reading_xml_path)
+    rid_xml_info_map = _read_reading_xml_csv(reading_xml_path)
+
+    # Loop the XML info and map the reading id to the PMC id, then write the
+    # info to the output TSV with the columns:
+    # PMC ID, Journal, Article Title, Corresponding Author, Year, Evidence Count
+    processed_ids = set()
+    with open(out_path, 'w') as fo:
+        for rid, xml_info in tqdm(rid_xml_info_map.items(), total=len(rid_xml_info_map)):
+            pmc = rid_pmc_map.get(rid)
+
+            if pmc is None:
+                continue
+
+            assert pmc not in processed_ids
+
+            # Get the evidence count
+            count = pmc_counts.get(pmc)
+            if count is None:
+                continue
+
+            # Write to the output file:
+            # * PMC ID
+            # * journal
+            # * article
+            # * email
+            # * corresponding_author (as Boolean)
+            # * year
+            # * indra_statement_count
+            fo.write(f'{pmc}\t'
+                     f'{xml_info["journal"]}\t'
+                     f'{xml_info["article"]}\t'
+                     f'{xml_info["email"]}\t'
+                     f'{xml_info["corresponding_author"]}\t'
+                     f'{xml_info["year"]}\t'
+                     f'{count}\n')
+
+            processed_ids.add(pmc)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--pmc_reading_id_path',
+                        help='Path to the PMC reading ID CSV file')
+    parser.add_argument('--reading_xml_path',
+                        help='Path to the reading id XML CSV file')
+    parser.add_argument('--pmc_count_path',
+                        help='Path to the PMC count TSV file')
+    parser.add_argument('--out_path',
+                        help='Path to the output TSV file')
+    args = parser.parse_args()
+
+    assert args.pmc_reading_id_path.endswith('.csv'),\
+        'PMC reading ID CSV file must be a CSV file'
+    assert args.reading_xml_path.endswith('.csv'), \
+        'Reading XML CSV file must be a CSV file'
+    assert args.pmc_count_path.endswith('.tsv'), \
+        'PMC count file must be a TSV file'
+    assert args.out_path.endswith('.tsv'), \
+        'The output file must be a TSV file'
+
+    main(args.pmc_reading_id_path,
+         args.reading_xml_path,
+         args.pmc_count_path,
+         args.out_path)
