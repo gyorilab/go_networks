@@ -76,9 +76,10 @@ def _detangle_layout(g: nx.Graph,
     # Move the disconnected nodes to above the graph at 10 % of the
     # y-distance, then set the x position linearly from the min to max with
     # no more than 10 nodes per row with 10 % of the y-distance between rows
+    # NOTE: The ndex view mirrors the layout, so the y-axis is flipped
     for n, node in enumerate(disconnected_nodes):
-        pos[node][1] = y_min - 0.1 * y_dist - ((n//10) % 10) * 0.1 * y_dist
-        pos[node][0] = x_min + ((n % 10) + 0.5) * x_dist / 10
+        pos[node] = [x_min + ((n % 10) + 0.5) * (x_dist / 10),
+                     y_max + 0.1 * y_dist * (1 + ((n//10) % 10))]
 
 
 def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500,
