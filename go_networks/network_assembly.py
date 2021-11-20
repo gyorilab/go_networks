@@ -73,26 +73,29 @@ def _detangle_layout(g: nx.Graph,
     # Sort the nodes alphabetically, this will group by family
     disconnected_nodes.sort()
 
-    # Move the disconnected nodes to above the graph at 10 % of the
+    # Move the disconnected nodes to below the graph at 10 % of the
     # y-distance, then set the x position linearly from the min to max with
-    # no more than 10 nodes per row with 10 % of the y-distance between rows
-    # NOTE: The ndex view mirrors the layout, so the y-axis is flipped
+    # no more than 10 nodes per row with 10 % of the x-distance between rows
     for n, node in enumerate(disconnected_nodes):
-        pos[node] = [x_min + ((n % 10) + 0.5) * (x_dist / 10),
-                     y_max + 0.1 * y_dist * (1 + ((n//10) % 10))]
+        pos[node][0] = x_min + ((n % 10) + 0.5) * (x_dist / 10)
+        pos[node][1] = y_min - 0.1 * y_dist * (1 + ((n//10) % 10))
 
 
 def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500,
                    untangle: bool = True) -> Dict:
     # Convert to networkx graph
     g = network.to_networkx()
+
     # Get layout
     pos = layout.kamada_kawai_layout(g, scale=scale_factor)
 
-    # Detangle nodes
-    if detangle:
+    # Untangle nodes
+    if untangle:
         _detangle_layout(g, pos)
-    return pos
+
+    # Convert to cx layout: need to invert the y-axis
+    cx_pos = {node: [x, -y] for node, (x, y) in pos.items()}
+    return cx_pos
 
 
 class GoNetworkAssembler:
