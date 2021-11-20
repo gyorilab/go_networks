@@ -83,7 +83,7 @@ def _detangle_layout(g: nx.Graph,
 
 
 def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500,
-                   detangle: bool = True) -> Dict:
+                   untangle: bool = True) -> Dict:
     # Convert to networkx graph
     g = network.to_networkx()
     # Get layout
