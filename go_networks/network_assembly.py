@@ -49,7 +49,7 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
     return parts
 
 
-def _detangle_layout(g: nx.Graph,
+def _untangle_layout(g: nx.Graph,
                      pos: Dict[str, List[float]]):
     # Find the nodes that are disconnected from the rest of the graph
     disconnected_nodes = []
@@ -91,7 +91,7 @@ def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500,
 
     # Untangle nodes
     if untangle:
-        _detangle_layout(g, pos)
+        _untangle_layout(g, pos)
 
     # Convert to cx layout: need to invert the y-axis
     cx_pos = {node: [x, -y] for node, (x, y) in pos.items()}
