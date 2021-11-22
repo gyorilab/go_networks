@@ -49,8 +49,8 @@ from gzip import decompress
 logger = logging.getLogger(__name__)
 
 
-def reading_xml_to_csv(out_path):
-    """Get XML content from the DB and save to CSV
+def text_ref_xml_to_csv(out_path):
+    """Get XML content keyed by text ref id from the DB and save to CSV
 
     The text_content table has the following columns (copied from
     indra_db/schemas/principal_schema.py):
@@ -84,7 +84,7 @@ def reading_xml_to_csv(out_path):
 
     Parameters
     ----------
-    out_path : str
+    out_path :
         Path to the output CSV file.
     """
     query = """
@@ -240,12 +240,13 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
     }
 
 
-def _read_reading_id_pmc_csv(path: str) -> dict:
+def _read_text_ref_id_pmc_csv(path: str) -> dict:
     with open(path, 'r') as f:
-        # reading ID -> PMC is a many-to-one mapping
+        # text ref ID -> PMC is a many-to-one mapping
         rid_pmc_map = {}
         line = f.readline()
         while line:
+            # Assumes the columns are <text ref ID>,<PMC ID>
             rid, pmc = line.strip().split(',')
             rid_pmc_map[rid] = pmc
             line = f.readline()
@@ -253,9 +254,9 @@ def _read_reading_id_pmc_csv(path: str) -> dict:
     return rid_pmc_map
 
 
-def _read_reading_xml_csv(path: str) -> dict:
+def _read_trid_xml_csv(path: str) -> dict:
     with open(path, 'r') as f:
-        rid_xml_map = {}
+        trid_xml_map = {}
         line = f.readline()
         while line:
             rid, raw_xml = line.strip().split(',')
@@ -264,11 +265,11 @@ def _read_reading_xml_csv(path: str) -> dict:
             xml_str = hex_bin_to_str(raw_xml)
 
             # Extract metadata from PMC XML
-            rid_xml_map[rid] = extract_info_from_pmc_xml(xml_str)
+            trid_xml_map[rid] = extract_info_from_pmc_xml(xml_str)
 
             line = f.readline()
 
-    return rid_xml_map
+    return trid_xml_map
 
 
 def main(pmc_reading_id_path: str,
@@ -287,12 +288,12 @@ def main(pmc_reading_id_path: str,
     # Get the reading ID -> PMC mapping
     if not Path(pmc_reading_id_path).exists():
         text_ref_id_pmc_id_dump(pmc_reading_id_path)
-    rid_pmc_map = _read_reading_id_pmc_csv(pmc_reading_id_path)
+    rid_pmc_map = _read_text_ref_id_pmc_csv(pmc_reading_id_path)
 
     # Get the reading id, XML mapping
     if not Path(reading_xml_path).exists():
-        reading_xml_to_csv(reading_xml_path)
-    rid_xml_info_map = _read_reading_xml_csv(reading_xml_path)
+        text_ref_xml_to_csv(reading_xml_path)
+    rid_xml_info_map = _read_trid_xml_csv(reading_xml_path)
 
     # Loop the XML info and map the reading id to the PMC id, then write the
     # info to the output TSV with the columns:

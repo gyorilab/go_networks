@@ -49,7 +49,7 @@ def statement_tsv_to_reading_counts(stmts_tsv, ignore_ungrounded=True,
         while line:
             ll = line.strip().split('\t')
 
-            # columns are [<raw id>, <reading id>, <hash>, <stmt_json>]
+            # columns are [<text ref id>, <reading id>, <hash>, <stmt_json>]
             reading_id = ll[1]
             if reading_id == r'\N':
                 line = fi.readline()
