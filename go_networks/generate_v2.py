@@ -254,7 +254,7 @@ def generate(sif_file: Optional[str] = None, props_file: Optional[str] = None):
 
     Parameters
     ----------
-    local_sif :
+    sif_file :
         If provided, load sif dump from this file. Default: load from S3.
     props_file :
         If provided, load property lookup from this file. Default: generate
