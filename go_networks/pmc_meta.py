@@ -139,7 +139,6 @@ def text_ref_id_pmc_id_dump(out_path):
       on the first report we find (in order of PubMed, PMC, then PMC
       Manuscripts).
 
-
     Parameters
     ----------
     out_path : str
@@ -226,7 +225,6 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
         tree.xpath(".//journal-title") else None
 
     # Article title
-    # FixMe: sometimes the title and the abstract are in the article-title tag
     article_title = (tree.xpath(".//article-title")[0].text or None) if \
         tree.xpath(".//article-title") else None
 
