@@ -70,8 +70,8 @@ def _untangle_layout(g: nx.Graph,
     x_min = min(pos.values(), key=lambda x: x[0])[0]
     x_dist = x_max - x_min
 
-    # Sort the nodes alphabetically, this will group by family
-    disconnected_nodes.sort()
+    # Sort the nodes lexicographically by name: 0-9, A-Z, a-z
+    disconnected_nodes = sorted(sorted(disconnected_nodes), key=str.upper)
 
     # Move the disconnected nodes to below the graph at 10 % of the
     # y-distance, then set the x position linearly from the min to max with
