@@ -263,12 +263,8 @@ def _read_reading_xml_csv(path: str) -> dict:
             # Convert hex-encoded raw string to string
             xml_str = hex_bin_to_str(raw_xml)
 
-            # Extract metadata from PMC XML, check that all values are set
-            meta_dict = extract_info_from_pmc_xml(xml_str)
-            if meta_dict['journal'] is None or meta_dict['article'] is None:
-                print(rid)
-            if all(v for v in meta_dict.values()):
-                rid_xml_map[rid] = meta_dict
+            # Extract metadata from PMC XML
+            rid_xml_map[rid] = extract_info_from_pmc_xml(xml_str)
 
             line = f.readline()
 
