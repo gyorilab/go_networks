@@ -259,13 +259,13 @@ def _read_trid_xml_csv(path: str) -> dict:
         trid_xml_map = {}
         line = f.readline()
         while line:
-            rid, raw_xml = line.strip().split(',')
+            trid, raw_xml = line.strip().split(',')
 
             # Convert hex-encoded raw string to string
             xml_str = hex_bin_to_str(raw_xml)
 
             # Extract metadata from PMC XML
-            trid_xml_map[rid] = extract_info_from_pmc_xml(xml_str)
+            trid_xml_map[trid] = extract_info_from_pmc_xml(xml_str)
 
             line = f.readline()
 
@@ -288,7 +288,7 @@ def main(pmc_reading_id_path: str,
     # Get the reading ID -> PMC mapping
     if not Path(pmc_reading_id_path).exists():
         text_ref_id_pmc_id_dump(pmc_reading_id_path)
-    rid_pmc_map = _read_text_ref_id_pmc_csv(pmc_reading_id_path)
+    trid_pmc_map = _read_text_ref_id_pmc_csv(pmc_reading_id_path)
 
     # Get the reading id, XML mapping
     if not Path(reading_xml_path).exists():
@@ -300,8 +300,9 @@ def main(pmc_reading_id_path: str,
     # PMC ID, Journal, Article Title, Corresponding Author, Year, Evidence Count
     processed_ids = set()
     with open(out_path, 'w') as fo:
-        for rid, xml_info in tqdm(rid_xml_info_map.items(), total=len(rid_xml_info_map)):
-            pmc = rid_pmc_map.get(rid)
+        for trid, xml_info in tqdm(rid_xml_info_map.items(),
+                                   total=len(rid_xml_info_map)):
+            pmc = trid_pmc_map.get(trid)
 
             if pmc is None:
                 continue
