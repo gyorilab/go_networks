@@ -49,6 +49,19 @@ from gzip import decompress
 logger = logging.getLogger(__name__)
 
 
+def buf_count_newlines_gen(fname: str) -> int:
+    # Source https://stackoverflow.com/a/68385697/10478812
+    def _make_gen(reader):
+        while True:
+            b = reader(2 ** 16)
+            if not b: break
+            yield b
+
+    with open(fname, "rb") as f:
+        count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
+    return count
+
+
 def text_ref_xml_to_csv(out_path):
     """Get XML content keyed by text ref id from the DB and save to CSV
 
