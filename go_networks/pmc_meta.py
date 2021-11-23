@@ -345,16 +345,23 @@ def main(
             # Skip if no PMC ID
             if pmc is None:
                 missing_pmc_mapping += 1
+                line = fi.readline()
                 continue
 
-            # Check that the PMC ID has not yet been processed
-            assert pmc not in processed_ids, f"PMC ID {pmc} already processed"
+            # Skip if already processed
+            elif pmc in processed_ids:
+                logger.info(f"PMC ID {pmc} already processed")
+                line = fi.readline()
+                continue
 
             # Get the evidence count
             count = pmc_counts.get(pmc, 0)
+
             # Skip if no count
             if not count:
                 missing_counts += 1
+                line = fi.readline()
+                continue
 
             # Convert hex-encoded raw string to string
             xml_str = hex_bin_to_str(raw_xml)
@@ -411,7 +418,7 @@ if __name__ == "__main__":
                         help="Path to the PMC count TSV file")
     parser.add_argument("--out_path", help="Path to the output TSV file")
     parser.add_argument(
-        "--xml_lines",
+        "--xml_lines", type=int,
         help="Number of lines to read from the XML file. If "
              "not specified, all lines will be read.",
     )
