@@ -55,7 +55,8 @@ def buf_count_newlines_gen(fname: str) -> int:
     def _make_gen(reader):
         while True:
             b = reader(2 ** 16)
-            if not b: break
+            if not b:
+                break
             yield b
 
     with open(fname, "rb") as f:
@@ -185,7 +186,8 @@ def hex_bin_to_str(raw_hex_bin: str) -> str:
     decode_hex = codecs.getdecoder("hex_codec")
     # It's a plain text string containing hex-encoded bytes, so it's first
     # two characters are escaping the hex-encoding: '\\x1f8b0808......'
-    hex_str = decode_hex(raw_hex_bin[2:])[0]
+    start_ix = 2 if raw_hex_bin.startswith("\\") else 0
+    hex_str = decode_hex(raw_hex_bin[start_ix:])[0]
     return decompress(hex_str).decode()
 
 
@@ -222,8 +224,7 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
             return (any_email[0].text or None) if any_email else None
 
     def _get_pub_year(root):
-        pub_years = [y.text for y in
-                     root.xpath(".//pub-date/year")]
+        pub_years = [y.text for y in root.xpath(".//pub-date/year")]
         if pub_years:
             # Get earliest publication year
             return min(pub_years)
@@ -235,34 +236,40 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
     email = _get_email(tree)
 
     # Journal name
-    journal = (tree.xpath(".//journal-title")[0].text or None) if \
-        tree.xpath(".//journal-title") else None
+    journal = (
+        (tree.xpath(".//journal-title")[0].text or None)
+        if tree.xpath(".//journal-title")
+        else None
+    )
 
     # Article title
-    article_title = (tree.xpath(".//article-title")[0].text or None) if \
-        tree.xpath(".//article-title") else None
+    article_title = (
+        (tree.xpath(".//article-title")[0].text or None)
+        if tree.xpath(".//article-title")
+        else None
+    )
 
     # Year
     year = _get_pub_year(tree)
 
     return {
-        'journal': journal,
-        'article': article_title,
-        'email': email,
-        'corresponding_author': bool(corr_auth),
-        'year': year,
+        "journal": journal,
+        "article": article_title,
+        "email": email,
+        "corresponding_author": bool(corr_auth),
+        "year": year,
     }
 
 
 def _read_text_ref_id_pmc_csv(path: str) -> dict:
     logger.info(f"Reading text ref ID - PMC CSV: {path}")
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         # text ref ID -> PMC is a many-to-one mapping???
         trid_pmc_map = {}
         line = f.readline()
         while line:
             # Assumes the columns are <text ref ID>,<PMC ID>
-            trid, pmc = line.strip().split(',')
+            trid, pmc = line.strip().split(",")
             trid_pmc_map[trid] = pmc
             line = f.readline()
 
@@ -271,11 +278,11 @@ def _read_text_ref_id_pmc_csv(path: str) -> dict:
 
 def _read_trid_xml_csv(path: str) -> dict:
     logger.info(f"Reading TRID - XML CSV: {path}")
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         trid_xml_map = {}
         line = f.readline()
         while line:
-            trid, raw_xml = line.strip().split(',')
+            trid, raw_xml = line.strip().split(",")
 
             # Convert hex-encoded raw string to string
             xml_str = hex_bin_to_str(raw_xml)
@@ -288,18 +295,20 @@ def _read_trid_xml_csv(path: str) -> dict:
     return trid_xml_map
 
 
-def main(pmc_reading_id_path: str,
-         reading_xml_path: str,
-         pmc_count_path: str,
-         out_path: str,
-         xml_lines: Optional[int] = None):
+def main(
+        pmc_reading_id_path: str,
+        reading_xml_path: str,
+        pmc_count_path: str,
+        out_path: str,
+        xml_lines: Optional[int] = None,
+):
     # Get the PMC count
-    with open(pmc_count_path, 'r') as f:
+    with open(pmc_count_path, "r") as f:
         logger.info(f"Reading PMC count file: {pmc_count_path}")
         pmc_counts = {}
         line = f.readline()
         while line:
-            pmc, count = line.strip().split('\t')
+            pmc, count = line.strip().split("\t")
             pmc_counts[pmc] = int(count)
             line = f.readline()
 
@@ -323,12 +332,12 @@ def main(pmc_reading_id_path: str,
 
     logger.info(f"Processing {xml_lines} lines from XML {reading_xml_path}.")
     t = tqdm(total=xml_lines)
-    with open(reading_xml_path, 'r') as fi, open(out_path, 'w') as fo:
+    with open(reading_xml_path, "r") as fi, open(out_path, "w") as fo:
         line = fi.readline()
         read_lines = 1
         while line:
             # Get content
-            trid, raw_xml = line.strip().split(',')
+            trid, raw_xml = line.strip().split(",")
 
             # Get PMC ID
             pmc = trid_pmc_map.get(trid)
@@ -339,7 +348,7 @@ def main(pmc_reading_id_path: str,
                 continue
 
             # Check that the PMC ID has not yet been processed
-            assert pmc not in processed_ids, f'PMC ID {pmc} already processed'
+            assert pmc not in processed_ids, f"PMC ID {pmc} already processed"
 
             # Get the evidence count
             count = pmc_counts.get(pmc)
@@ -363,13 +372,15 @@ def main(pmc_reading_id_path: str,
             # * corresponding_author (as Boolean)
             # * year
             # * indra_statement_count
-            fo.write(f'{pmc}\t'
-                     f'{xml_info["journal"]}\t'
-                     f'{xml_info["article"]}\t'
-                     f'{xml_info["email"]}\t'
-                     f'{xml_info["corresponding_author"]}\t'
-                     f'{xml_info["year"]}\t'
-                     f'{count}\n')
+            fo.write(
+                f"{pmc}\t"
+                f'{xml_info["journal"]}\t'
+                f'{xml_info["article"]}\t'
+                f'{xml_info["email"]}\t'
+                f'{xml_info["corresponding_author"]}\t'
+                f'{xml_info["year"]}\t'
+                f"{count}\n"
+            )
 
             processed_ids.add(pmc)
 
@@ -383,38 +394,44 @@ def main(pmc_reading_id_path: str,
     t.close()
 
     if missing_pmc_mapping:
-        logger.info(f'{missing_pmc_mapping} missing PMC mapping(s)')
+        logger.info(f"{missing_pmc_mapping} missing PMC mapping(s)")
 
     if missing_counts:
-        logger.info(f'{missing_counts} missing PMC count(s)')
+        logger.info(f"{missing_counts} missing PMC count(s)")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--pmc_reading_id_path',
-                        help='Path to the PMC reading ID CSV file')
-    parser.add_argument('--reading_xml_path',
-                        help='Path to the reading id XML CSV file')
-    parser.add_argument('--pmc_count_path',
-                        help='Path to the PMC count TSV file')
-    parser.add_argument('--out_path',
-                        help='Path to the output TSV file')
-    parser.add_argument('--xml_lines',
-                        help='Number of lines to read from the XML file. If '
-                             'not specified, all lines will be read.')
+    parser.add_argument(
+        "--pmc_reading_id_path", help="Path to the PMC reading ID CSV file"
+    )
+    parser.add_argument(
+        "--reading_xml_path", help="Path to the reading id XML CSV file"
+    )
+    parser.add_argument("--pmc_count_path",
+                        help="Path to the PMC count TSV file")
+    parser.add_argument("--out_path", help="Path to the output TSV file")
+    parser.add_argument(
+        "--xml_lines",
+        help="Number of lines to read from the XML file. If "
+             "not specified, all lines will be read.",
+    )
     args = parser.parse_args()
 
-    assert args.pmc_reading_id_path.endswith('.csv'),\
-        'PMC reading ID CSV file must be a CSV file'
-    assert args.reading_xml_path.endswith('.csv'), \
-        'Reading XML CSV file must be a CSV file'
-    assert args.pmc_count_path.endswith('.tsv'), \
-        'PMC count file must be a TSV file'
-    assert args.out_path.endswith('.tsv'), \
-        'The output file must be a TSV file'
+    assert args.pmc_reading_id_path.endswith(
+        ".csv"
+    ), "PMC reading ID CSV file must be a CSV file"
+    assert args.reading_xml_path.endswith(
+        ".csv"
+    ), "Reading XML CSV file must be a CSV file"
+    assert args.pmc_count_path.endswith(
+        ".tsv"), "PMC count file must be a TSV file"
+    assert args.out_path.endswith(".tsv"), "The output file must be a TSV file"
 
-    main(args.pmc_reading_id_path,
-         args.reading_xml_path,
-         args.pmc_count_path,
-         args.out_path,
-         args.xml_lines)
+    main(
+        args.pmc_reading_id_path,
+        args.reading_xml_path,
+        args.pmc_count_path,
+        args.out_path,
+        args.xml_lines,
+    )
