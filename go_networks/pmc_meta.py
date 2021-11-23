@@ -351,11 +351,10 @@ def main(
             assert pmc not in processed_ids, f"PMC ID {pmc} already processed"
 
             # Get the evidence count
-            count = pmc_counts.get(pmc)
+            count = pmc_counts.get(pmc, 0)
             # Skip if no count
-            if count is None:
+            if not count:
                 missing_counts += 1
-                continue
 
             # Convert hex-encoded raw string to string
             xml_str = hex_bin_to_str(raw_xml)
