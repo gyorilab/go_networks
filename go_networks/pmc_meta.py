@@ -241,17 +241,18 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
 
 
 def _read_text_ref_id_pmc_csv(path: str) -> dict:
+    logger.info(f"Reading text ref ID - PMC CSV: {path}")
     with open(path, 'r') as f:
-        # text ref ID -> PMC is a many-to-one mapping
-        rid_pmc_map = {}
+        # text ref ID -> PMC is a many-to-one mapping???
+        trid_pmc_map = {}
         line = f.readline()
         while line:
             # Assumes the columns are <text ref ID>,<PMC ID>
-            rid, pmc = line.strip().split(',')
-            rid_pmc_map[rid] = pmc
+            trid, pmc = line.strip().split(',')
+            trid_pmc_map[trid] = pmc
             line = f.readline()
 
-    return rid_pmc_map
+    return trid_pmc_map
 
 
 def _read_trid_xml_csv(path: str) -> dict:
