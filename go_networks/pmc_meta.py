@@ -256,6 +256,7 @@ def _read_text_ref_id_pmc_csv(path: str) -> dict:
 
 
 def _read_trid_xml_csv(path: str) -> dict:
+    logger.info(f"Reading TRID - XML CSV: {path}")
     with open(path, 'r') as f:
         trid_xml_map = {}
         line = f.readline()
@@ -279,6 +280,7 @@ def main(pmc_reading_id_path: str,
          out_path: str):
     # Get the PMC count
     with open(pmc_count_path, 'r') as f:
+        logger.info(f"Reading PMC count file: {pmc_count_path}")
         pmc_counts = {}
         line = f.readline()
         while line:
