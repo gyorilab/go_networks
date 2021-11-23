@@ -299,19 +299,23 @@ def main(pmc_reading_id_path: str,
     # info to the output TSV with the columns:
     # PMC ID, Journal, Article Title, Corresponding Author, Year, Evidence Count
     processed_ids = set()
+    missing_pmc_mapping = 0
+    missing_counts = 0
     with open(out_path, 'w') as fo:
         for trid, xml_info in tqdm(rid_xml_info_map.items(),
                                    total=len(rid_xml_info_map)):
             pmc = trid_pmc_map.get(trid)
 
             if pmc is None:
+                missing_pmc_mapping += 1
                 continue
 
-            assert pmc not in processed_ids
+            assert pmc not in processed_ids, f'PMC ID {pmc} already processed'
 
             # Get the evidence count
             count = pmc_counts.get(pmc)
             if count is None:
+                missing_counts += 1
                 continue
 
             # Write to the output file:
@@ -331,6 +335,12 @@ def main(pmc_reading_id_path: str,
                      f'{count}\n')
 
             processed_ids.add(pmc)
+
+        if missing_pmc_mapping:
+            logger.info(f'{missing_pmc_mapping} missing PMC mapping(s)')
+
+        if missing_counts:
+            logger.info(f'{missing_counts} missing PMC count(s)')
 
 
 if __name__ == '__main__':
