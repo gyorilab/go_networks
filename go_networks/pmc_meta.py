@@ -39,6 +39,7 @@ import argparse
 import codecs
 import logging
 from pathlib import Path
+from typing import Optional
 
 from lxml import etree
 from tqdm import tqdm
@@ -290,7 +291,8 @@ def _read_trid_xml_csv(path: str) -> dict:
 def main(pmc_reading_id_path: str,
          reading_xml_path: str,
          pmc_count_path: str,
-         out_path: str):
+         out_path: str,
+         xml_lines: Optional[int] = None):
     # Get the PMC count
     with open(pmc_count_path, 'r') as f:
         logger.info(f"Reading PMC count file: {pmc_count_path}")
@@ -309,7 +311,6 @@ def main(pmc_reading_id_path: str,
     # Get the reading id, XML mapping
     if not Path(reading_xml_path).exists():
         text_ref_xml_to_csv(reading_xml_path)
-    rid_xml_info_map = _read_trid_xml_csv(reading_xml_path)
 
     # Loop the XML info and map the reading id to the PMC id, then write the
     # info to the output TSV with the columns:
@@ -317,22 +318,42 @@ def main(pmc_reading_id_path: str,
     processed_ids = set()
     missing_pmc_mapping = 0
     missing_counts = 0
-    with open(out_path, 'w') as fo:
-        for trid, xml_info in tqdm(rid_xml_info_map.items(),
-                                   total=len(rid_xml_info_map)):
+    if xml_lines is None:
+        xml_lines = buf_count_newlines_gen(reading_xml_path)
+
+    logger.info(f"Processing {xml_lines} lines from XML {reading_xml_path}.")
+    t = tqdm(total=xml_lines)
+    with open(reading_xml_path, 'r') as fi, open(out_path, 'w') as fo:
+        line = fi.readline()
+        read_lines = 1
+        while line:
+            # Get content
+            trid, raw_xml = line.strip().split(',')
+
+            # Get PMC ID
             pmc = trid_pmc_map.get(trid)
 
+            # Skip if no PMC ID
             if pmc is None:
                 missing_pmc_mapping += 1
                 continue
 
+            # Check that the PMC ID has not yet been processed
             assert pmc not in processed_ids, f'PMC ID {pmc} already processed'
 
             # Get the evidence count
             count = pmc_counts.get(pmc)
+            # Skip if no count
             if count is None:
                 missing_counts += 1
                 continue
+
+            # Convert hex-encoded raw string to string
+            xml_str = hex_bin_to_str(raw_xml)
+
+            # Extract metadata from PMC XML
+            xml_info = extract_info_from_pmc_xml(xml_str)
+            t.update()
 
             # Write to the output file:
             # * PMC ID
@@ -352,11 +373,20 @@ def main(pmc_reading_id_path: str,
 
             processed_ids.add(pmc)
 
-        if missing_pmc_mapping:
-            logger.info(f'{missing_pmc_mapping} missing PMC mapping(s)')
+            if read_lines > xml_lines:
+                logger.info(f"Read {read_lines} lines")
+                break
 
-        if missing_counts:
-            logger.info(f'{missing_counts} missing PMC count(s)')
+            line = fi.readline()
+            read_lines += 1
+
+    t.close()
+
+    if missing_pmc_mapping:
+        logger.info(f'{missing_pmc_mapping} missing PMC mapping(s)')
+
+    if missing_counts:
+        logger.info(f'{missing_counts} missing PMC count(s)')
 
 
 if __name__ == '__main__':
@@ -369,6 +399,9 @@ if __name__ == '__main__':
                         help='Path to the PMC count TSV file')
     parser.add_argument('--out_path',
                         help='Path to the output TSV file')
+    parser.add_argument('--xml_lines',
+                        help='Number of lines to read from the XML file. If '
+                             'not specified, all lines will be read.')
     args = parser.parse_args()
 
     assert args.pmc_reading_id_path.endswith('.csv'),\
@@ -383,4 +416,5 @@ if __name__ == '__main__':
     main(args.pmc_reading_id_path,
          args.reading_xml_path,
          args.pmc_count_path,
-         args.out_path)
+         args.out_path,
+         args.xml_lines)
