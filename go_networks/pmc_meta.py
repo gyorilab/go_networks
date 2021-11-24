@@ -327,6 +327,7 @@ def main(
     processed_ids = set()
     missing_pmc_mapping = 0
     missing_counts = 0
+    duplicate_pmc_mapping = 0
     if xml_lines is None:
         xml_lines = buf_count_newlines_gen(reading_xml_path)
 
@@ -350,7 +351,7 @@ def main(
 
             # Skip if already processed
             elif pmc in processed_ids:
-                logger.info(f"PMC ID {pmc} already processed")
+                duplicate_pmc_mapping += 1
                 line = fi.readline()
                 continue
 
@@ -404,6 +405,9 @@ def main(
 
     if missing_counts:
         logger.info(f"{missing_counts} missing PMC count(s)")
+
+    if duplicate_pmc_mapping:
+        logger.info(f"{duplicate_pmc_mapping} duplicate PMC mapping(s)")
 
 
 if __name__ == "__main__":
