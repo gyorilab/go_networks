@@ -333,10 +333,14 @@ def main(
 
     logger.info(f"Processing {xml_lines} lines from XML {reading_xml_path}.")
     t = tqdm(total=xml_lines)
-    with open(reading_xml_path, "r") as fi, open(out_path, "w") as fo:
+    with open(reading_xml_path, "r") as fi, open(out_path, "w") as fo, \
+            open('failed_xml.csv', 'w') as f_failed:
         line = fi.readline()
         read_lines = 1
         while line:
+            # Update progress bar
+            t.update()
+
             # Get content
             trid, raw_xml = line.strip().split(",")
 
@@ -358,18 +362,21 @@ def main(
             # Get the evidence count
             count = pmc_counts.get(pmc, 0)
 
-            # Skip if no count
+            # Count the no counts, but don't skip
             if not count:
                 missing_counts += 1
+
+            try:
+                # Convert hex-encoded raw string to string and extract metadata
+                # from PMC XML
+                xml_str = hex_bin_to_str(raw_xml)
+                xml_info = extract_info_from_pmc_xml(xml_str)
+            except ValueError:
+                logger.warning(
+                    f"Failed to parse XML for PMC {pmc}; TRID {trid}")
+                f_failed.write(f"{pmc},{trid}\n")
                 line = fi.readline()
                 continue
-
-            # Convert hex-encoded raw string to string
-            xml_str = hex_bin_to_str(raw_xml)
-
-            # Extract metadata from PMC XML
-            xml_info = extract_info_from_pmc_xml(xml_str)
-            t.update()
 
             # Write to the output file:
             # * PMC ID
