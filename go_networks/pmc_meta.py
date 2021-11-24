@@ -291,6 +291,9 @@ def _read_text_ref_id_pmc_csv(path: str) -> dict:
         # text ref ID -> PMC is a many-to-one mapping???
         trid_pmc_map = {}
         line = f.readline()
+        # Check if the first line is a header
+        if line.startswith(("trid,", "text_ref_id,")):
+            line = f.readline()
         while line:
             # Assumes the columns are <text ref ID>,<PMC ID>
             trid, pmc = line.strip().split(",")
@@ -305,6 +308,9 @@ def _read_trid_xml_csv(path: str) -> dict:
     with open(path, "r") as f:
         trid_xml_map = {}
         line = f.readline()
+        # Check if the first line is the header
+        if line.startswith(("text_ref_id,", "trid,")):
+            line = f.readline()
         while line:
             trid, raw_xml = line.strip().split(",")
 
