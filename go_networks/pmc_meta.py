@@ -335,6 +335,9 @@ def main(
     t = tqdm(total=xml_lines)
     with open(reading_xml_path, "r") as fi, open(out_path, "w") as fo, \
             open('failed_xml.csv', 'w') as f_failed:
+        # Add header to output file
+        fo.write("pmc_id\tjournal\tarticle_title\temail\t"
+                 "corresponding_author\tyear\tevidence_count\n")
         line = fi.readline()
         read_lines = 1
         while line:
