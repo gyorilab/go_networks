@@ -214,7 +214,7 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
     -------
     :
     """
-    tree = etree.fromstring(xml_str)
+    tree = etree.fromstring(xml_str.encode('utf-8'))
     corr_author_query = ".//contrib[@contrib-type='author' and @corresp='yes']"
 
     def _get_email(root):
