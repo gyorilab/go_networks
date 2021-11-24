@@ -453,6 +453,9 @@ def main(
     if duplicate_pmc_mapping:
         logger.info(f"{duplicate_pmc_mapping} duplicate PMC mapping(s)")
 
+    logger.info(f"Wrote PMC IDs that failed to process to "
+                f"{Path('./failed_xml.csv').absolute().as_posix()}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
