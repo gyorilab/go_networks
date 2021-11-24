@@ -35,6 +35,7 @@ For what I have done in the past, I have just taken the first entries
 
 .//email
 """
+import csv
 import argparse
 import codecs
 import logging
@@ -333,11 +334,15 @@ def main(
 
     logger.info(f"Processing {xml_lines} lines from XML {reading_xml_path}.")
     t = tqdm(total=xml_lines)
-    with open(reading_xml_path, "r") as fi, open(out_path, "w") as fo, \
+    with open(reading_xml_path, "r") as fi, \
+            open(out_path, "w", newline='') as fo, \
             open('failed_xml.csv', 'w') as f_failed:
+        # Get csv writer
+        writer = csv.writer(fo, delimiter="\t")
+
         # Add header to output file
-        fo.write("pmc_id\tjournal\tarticle_title\temail\t"
-                 "corresponding_author\tyear\tevidence_count\n")
+        writer.writerow(["pmc_id", "journal", "article_title", "email",
+                         "corresponding_author", "year", "evidence_count"])
         line = fi.readline()
         read_lines = 1
         while line:
@@ -389,15 +394,15 @@ def main(
             # * corresponding_author (as Boolean)
             # * year
             # * indra_statement_count
-            fo.write(
-                f"{pmc}\t"
-                f'{xml_info["journal"]}\t'
-                f'{xml_info["article"]}\t'
-                f'{xml_info["email"]}\t'
-                f'{xml_info["corresponding_author"]}\t'
-                f'{xml_info["year"]}\t'
-                f"{count}\n"
-            )
+            writer.writerow([
+                pmc,
+                xml_info["journal"],
+                xml_info["article"],
+                xml_info["email"],
+                xml_info["corresponding_author"],
+                xml_info["year"],
+                count
+            ])
 
             processed_ids.add(pmc)
 
