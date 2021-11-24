@@ -48,6 +48,9 @@ from tqdm import tqdm
 from indra_db_lite.construction import query_to_csv
 from gzip import decompress
 
+from indra.literature.pmc_client import _remove_elements_by_tag, \
+    _replace_unwanted_elements_with_their_captions, _select_from_top_level
+
 logger = logging.getLogger(__name__)
 
 
@@ -230,6 +233,30 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
             # Get earliest publication year
             return min(pub_years)
 
+    def _get_title(root):
+        # Remove namespaces if any exist
+        if root.tag.startswith('{'):
+            for element in root.getiterator():
+                # The following code will throw a ValueError for some
+                # exceptional tags such as comments and processing instructions.
+                # It's safe to just leave these tag names unchanged.
+                try:
+                    element.tag = etree.QName(element).localname
+                except ValueError:
+                    continue
+            etree.cleanup_namespaces(root)
+        # Strip out latex
+        _remove_elements_by_tag(root, 'tex-math')
+        # Strip out all content in unwanted elements except the captions
+        _replace_unwanted_elements_with_their_captions(root)
+        # First process front element. Titles alt-titles and abstracts
+        # are pulled from here.
+        front_elements = _select_from_top_level(root, 'front')
+        title_xpath = './article-meta/title-group/article-title'
+        for front_element in front_elements:
+            for element in front_element.xpath(title_xpath):
+                return ' '.join(element.itertext())
+
     # Corresponding author
     corr_auth = tree.xpath(corr_author_query)
 
@@ -244,11 +271,7 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
     )
 
     # Article title
-    article_title = (
-        (tree.xpath(".//article-title")[0].text or None)
-        if tree.xpath(".//article-title")
-        else None
-    )
+    article_title = _get_title(tree)
 
     # Year
     year = _get_pub_year(tree)
