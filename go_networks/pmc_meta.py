@@ -271,7 +271,10 @@ def extract_info_from_pmc_xml(xml_str: str) -> dict:
     )
 
     # Article title
-    article_title = _get_title(tree)
+    try:
+        article_title = _get_title(tree)
+    except ValueError:
+        article_title = None
 
     # Year
     year = _get_pub_year(tree)
