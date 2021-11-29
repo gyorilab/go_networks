@@ -340,6 +340,9 @@ def main(
         logger.info(f"Reading PMC count file: {pmc_count_path}")
         pmc_counts = {}
         line = f.readline()
+        # Check if the first line is a header
+        if line.startswith(("pmcid\t", "pmc_id\t")):
+            line = f.readline()
         while line:
             pmc, count = line.strip().split("\t")
             pmc_counts[pmc] = int(count)
@@ -376,6 +379,10 @@ def main(
         writer.writerow(["pmc_id", "journal", "article_title", "email",
                          "corresponding_author", "year", "evidence_count"])
         line = fi.readline()
+        # Check if the first line is the header
+        if line.startswith(("text_ref_id\t", "trid\t")):
+            line = fi.readline()
+
         read_lines = 1
         while line:
             # Update progress bar
