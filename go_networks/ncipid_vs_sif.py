@@ -87,8 +87,8 @@ def _get_node_info(
         # Get the HGNC id from the SIF name map
         hgnc_id = _nim(name)
 
-        # If we have a HGNC id, return it (other ids might work too?)
-        if hgnc_id is not None and hgnc_id[0] == "HGNC":
+        # If we have a mapping, return it
+        if hgnc_id is not None:
             hns, hid = hgnc_id
             return name, hns, hid
 
