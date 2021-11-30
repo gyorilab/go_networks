@@ -141,7 +141,17 @@ def _get_node_info(
 
     # Last resort: try to get a name from gilda
     if use_gilda:
-        return _get_grounding(name)
+        grounding = _get_grounding(name)
+        if grounding:
+            return grounding
+        # Try to get a grounding without 'family' in the name. This works for
+        # e.g. "Gi" vs "Gi family"
+        if 'family' in name.lower():
+            name = name.replace('family', '').strip()
+            grounding = _get_grounding(name)
+            # Only return if gilda found a family in FPLX
+            if grounding and grounding[1] == 'FPLX':
+                return grounding
 
 
 def get_node_mapping(
