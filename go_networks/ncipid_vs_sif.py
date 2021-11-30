@@ -4,11 +4,8 @@ the INDRA SIF dump.
 """
 import logging
 import pickle
-from pathlib import Path
-import argparse
 from typing import Tuple, Optional, List, Dict
 
-import networkx as nx
 import pandas as pd
 from tqdm import tqdm
 
@@ -24,8 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def _rank(list_of_names: List[str], name) -> int:
-    return list_of_names.index(name) if name in list_of_names else len(
-        list_of_names)
+    return list_of_names.index(name) if name in list_of_names else len(list_of_names)
 
 
 def _normalize(db_name: str) -> str:
@@ -48,7 +44,7 @@ def _get_grounding(name):
 
 
 def _get_node_info(
-        cx, cx_id, sif_name_map, use_gilda
+    cx, cx_id, sif_name_map, use_gilda
 ) -> Optional[Tuple[str, str, str]]:
     # Shorthand for looking up ns-id pair from name
     def _nim(nom: str) -> Optional[Tuple[str, str]]:
@@ -101,8 +97,7 @@ def _get_node_info(
         up_prim_id = get_primary_id(_id)
         if up_prim_id:
             xrefs = bio_ontology.get_mappings("UP", up_prim_id)
-            for xns, xid in sorted(xrefs, key=lambda x: _rank(default_ns_order,
-                                                              x[0])):
+            for xns, xid in sorted(xrefs, key=lambda x: _rank(default_ns_order, x[0])):
                 if xns in default_ns_order:
                     return _ont_n(xns, xid, name), xns, xid
 
@@ -114,7 +109,7 @@ def _get_node_info(
             if up_prim_id:
                 xrefs = bio_ontology.get_mappings("UP", up_prim_id)
                 for xns, xid in sorted(
-                        xrefs, key=lambda x: _rank(default_ns_order, x[0])
+                    xrefs, key=lambda x: _rank(default_ns_order, x[0])
                 ):
                     if xns in default_ns_order:
                         return _ont_n(xns, xid, name), xns, xid
@@ -125,15 +120,13 @@ def _get_node_info(
         if ns in default_ns_order:
             xrefs = bio_ontology.get_mappings(ns, _id)
             xrefs.append((ns, _id))
-            for xns, xid in sorted(xrefs, key=lambda x: _rank(default_ns_order,
-                                                              x[0])):
+            for xns, xid in sorted(xrefs, key=lambda x: _rank(default_ns_order, x[0])):
                 if xns in default_ns_order:
                     return _ont_n(xns, xid, name), xns, xid
 
         # Loop the xrefs and grab the first one that's in default_ns_order
         xrefs = bio_ontology.get_mappings(ns, _id)
-        for xns, xid in sorted(xrefs,
-                               key=lambda x: _rank(default_ns_order, x[0])):
+        for xns, xid in sorted(xrefs, key=lambda x: _rank(default_ns_order, x[0])):
             if xns in default_ns_order:
                 return _ont_n(xns, xid, name), xns, xid
 
@@ -142,8 +135,7 @@ def _get_node_info(
         for alias in aliases:
             ans, aid = alias.split(":")
             xrefs = bio_ontology.get_mappings(ans, aid)
-            for xns, xid in sorted(xrefs, key=lambda x: _rank(default_ns_order,
-                                                              x[0])):
+            for xns, xid in sorted(xrefs, key=lambda x: _rank(default_ns_order, x[0])):
                 if xns in default_ns_order:
                     return _ont_n(xns, xid, name), xns, xid
 
@@ -153,7 +145,7 @@ def _get_node_info(
 
 
 def get_node_mapping(
-        cx, sif_name_map, use_gilda=False
+    cx, sif_name_map, use_gilda=False
 ) -> Dict[str, Tuple[str, str, str]]:
     """Get a mapping from node id to INDRA entity."""
 
@@ -189,8 +181,7 @@ def main(sif_file, ncipid_file):
     # Make a name to NS-ID mapping
     sif_ns_id_map = {
         n: (ns, _id)
-        for ns, _id, n in
-        set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
+        for ns, _id, n in set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
             set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
         )
     }
