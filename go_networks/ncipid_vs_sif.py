@@ -146,11 +146,11 @@ def _get_node_info(
             return grounding
         # Try to get a grounding without 'family' in the name. This works for
         # e.g. "Gi" vs "Gi family"
-        if 'family' in name.lower():
-            name = name.replace('family', '').strip()
+        if "family" in name.lower():
+            name = name.replace("family", "").strip()
             grounding = _get_grounding(name)
             # Only return if gilda found a family in FPLX
-            if grounding and grounding[1] == 'FPLX':
+            if grounding and grounding[1] == "FPLX":
                 return grounding
 
 
@@ -235,10 +235,26 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
     )
 
 
-def main(sif_file, ncipid_file):
+def main(sif_file, ncipid_file, merge_how="outer"):
+    """Convert the nci-pid CX network to a SIF file and merge with the INDRA SIF
+
+    Parameters
+    ----------
+    sif_file :
+        The INDRA SIF dump file location
+    ncipid_file :
+        The nci-pid CX dump file location
+    merge_how :
+        How to merge the INDRA SIF with the nci-pid CX SIF. This is passed to
+        the "how" parameter for pandas.DataFrame.merge(). The sif dump is
+        "left" and the nci-pid CX SIF is "right":
+        sif_df.merge(cx_df, how=merge_how)
     """
-    Convert the nci-pid CX network to a SIF file.
-    """
+    if merge_how not in ["left", "right", "outer", "inner", "cross"]:
+        raise ValueError(
+            f"Invalid merge_how value {merge_how}. Allowed "
+            f"values are 'left', 'right', 'outer', 'inner', 'cross'"
+        )
     # Load the CX network
     nci_cx = create_nice_cx_from_file(ncipid_file)
 
@@ -266,7 +282,7 @@ def main(sif_file, ncipid_file):
     return sif_df.merge(
         cx_sif,
         on=["agA_ns", "agA_id", "agB_ns", "agB_id"],
-        how="right",
+        how=merge_how,
         suffixes=("_sif", "_cx"),
         indicator=True,
     )
