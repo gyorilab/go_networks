@@ -200,17 +200,19 @@ def main(sif_file, ncipid_file):
     node_id_to_entity = get_node_mapping(nci_cx, sif_ns_id_map)
 
     # Loop the edges and add them to a list and then to a DataFrame
+    s_names = []
     s_ns_list = []
     s_id_list = []
+    t_names = []
     t_ns_list = []
     t_id_list = []
     int_list = []
 
     logger.info("Adding edges to the CX SIF input")
-    nedges = len(nci_cx.edges)
-    for e in tqdm(nci_cx.edges, total=nedges):
+    nedges = len(cx.edges)
+    for e in tqdm(cx.edges, total=nedges):
         # TodO: add support for undirected edges (i.e. complexes)
-        ed = nci_cx.get_edge(e)
+        ed = cx.get_edge(e)
         s, interaction, t = ed["s"], ed["i"], ed["t"]
 
         s_entity = node_id_to_entity.get(s)
@@ -219,18 +221,34 @@ def main(sif_file, ncipid_file):
         if s_entity is None or t_entity is None:
             continue
 
-        s_ns_list.append(s_entity[1])
-        s_id_list.append(s_entity[2])
-        t_ns_list.append(t_entity[1])
-        t_id_list.append(t_entity[2])
+        s_name, s_ns, s_id = s_entity
+        t_name, t_ns, t_id = t_entity
+        s_names.append(s_name)
+        s_ns_list.append(s_ns)
+        s_id_list.append(s_id)
+        t_names.append(t_name)
+        t_ns_list.append(t_ns)
+        t_id_list.append(t_id)
         int_list.append(interaction)
+
+        # If the interaction is a complex, add the reverse edge as well
+        if interaction == "in-complex-with":
+            s_names.append(t_name)
+            s_ns_list.append(t_ns)
+            s_id_list.append(t_id)
+            t_names.append(s_name)
+            t_ns_list.append(s_ns)
+            t_id_list.append(s_id)
+            int_list.append(interaction)
 
     # Create a DataFrame
     logger.info("Creating the CX DataFrame")
     return pd.DataFrame(
         {
+            "agA_name": s_names,
             "agA_ns": s_ns_list,
             "agA_id": s_id_list,
+            "agB_name": t_names,
             "agB_ns": t_ns_list,
             "agB_id": t_id_list,
             "interaction": int_list,
