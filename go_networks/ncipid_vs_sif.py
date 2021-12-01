@@ -177,28 +177,7 @@ def get_node_mapping(
     return id_to_entity
 
 
-def main(sif_file, ncipid_file):
-    """
-    Convert the nci-pid CX network to a SIF file.
-    """
-    # Load the CX network
-    nci_cx = create_nice_cx_from_file(ncipid_file)
-
-    # Load the INDRA SIF dump
-    with open(sif_file, "rb") as fh:
-        sif_df = pickle.load(fh)
-
-    # Make a name to NS-ID mapping
-    sif_ns_id_map = {
-        n: (ns, _id)
-        for ns, _id, n in set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
-            set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
-        )
-    }
-
-    # Get node id to entity map
-    node_id_to_entity = get_node_mapping(nci_cx, sif_ns_id_map)
-
+def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
     # Loop the edges and add them to a list and then to a DataFrame
     s_names = []
     s_ns_list = []
@@ -253,4 +232,41 @@ def main(sif_file, ncipid_file):
             "agB_id": t_id_list,
             "interaction": int_list,
         }
+    )
+
+
+def main(sif_file, ncipid_file):
+    """
+    Convert the nci-pid CX network to a SIF file.
+    """
+    # Load the CX network
+    nci_cx = create_nice_cx_from_file(ncipid_file)
+
+    # Load the INDRA SIF dump
+    with open(sif_file, "rb") as fh:
+        sif_df: pd.DataFrame = pickle.load(fh)
+
+    # Make a name to NS-ID mapping from the sif dump
+    sif_ns_id_map = {
+        n: (ns, _id)
+        for ns, _id, n in set(zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
+            set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
+        )
+    }
+
+    # Get node id to entity map
+    node_id_to_entity = get_node_mapping(nci_cx, sif_ns_id_map)
+
+    # Build the CX SIF file
+    logger.info("Building CX SIF file")
+    cx_sif = build_cx_sif(nci_cx, node_id_to_entity)
+
+    # Merge the two DataFrames on A-B pairs (look at depmap_analysis.)
+    logger.info("Merging the CX SIF with the INDRA SIF")
+    return sif_df.merge(
+        cx_sif,
+        on=["agA_ns", "agA_id", "agB_ns", "agB_id"],
+        how="right",
+        suffixes=("_sif", "_cx"),
+        indicator=True,
     )
