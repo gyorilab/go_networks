@@ -73,7 +73,7 @@ def _get_grounding(name):
 
 
 def _get_node_info(
-    cx, cx_id, sif_name_map, use_gilda
+    cx, cx_id, sif_name_map=None, use_gilda: bool = True
 ) -> Optional[Tuple[str, str, str]]:
     # Shorthand for looking up ns-id pair from name
     def _nim(nom: str) -> Optional[Tuple[str, str]]:
@@ -114,7 +114,7 @@ def _get_node_info(
     if ns == "UP":
 
         # Get the HGNC id from the SIF name map
-        hgnc_id = _nim(name)
+        hgnc_id = _nim(name) if sif_name_map else None
 
         # If we have a mapping, return it
         if hgnc_id is not None:
@@ -184,7 +184,7 @@ def _get_node_info(
 
 
 def get_node_mapping(
-    cx, sif_name_map, use_gilda=False
+    cx, sif_name_map=None, use_gilda=True
 ) -> Dict[str, Tuple[str, str, str]]:
     """Get a mapping from node id to INDRA entity."""
 
