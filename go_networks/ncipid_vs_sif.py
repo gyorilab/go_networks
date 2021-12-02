@@ -270,8 +270,9 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
         }
     )
 
-    # Drop duplicates and reset the index
-    cx_sif.drop_duplicates(inplace=True)
+    # Drop duplicates and reset the index (must set values as str to avoid
+    # error on lists being unhashable)
+    cx_sif = cx_sif.loc[cx_sif.astype(str).drop_duplicates().index]
     cx_sif.reset_index(inplace=True, drop=True)
     return cx_sif
 
@@ -373,9 +374,15 @@ def venn_plots(merged_df: pd.DataFrame, out_dir: str):
     # Gather index sets for venn plotting
     logger.info("Gathering index sets for venn plotting")
     t = tqdm(total=9)
-    cx_tot_ix = set(merged_df.query("_merge in ['right_only', 'both']").index.to_list())
+    cx_tot_ix = set(
+        merged_df.query(
+            "_merge in ['right_only', 'both'] & agA_ns == 'HGNC' & agB_ns == 'HGNC'"
+        ).index.to_list()
+    )
     t.update()
-    sif_merged: pd.DataFrame = merged_df.query("_merge in ['left_only', 'both']")
+    sif_merged: pd.DataFrame = merged_df.query(
+        "_merge in ['left_only', " "'both'] & agA_ns == 'HGNC' & agB_ns == 'HGNC'"
+    )
     t.update()
     sif_tot_ix = set(sif_merged.index.to_list())
     t.update()
@@ -415,8 +422,7 @@ def venn_plots(merged_df: pd.DataFrame, out_dir: str):
 
     sif_min3_readers_ix = set(
         sif_merged[
-            sif_merged.source_counts.apply(lambda scl: _reader_count_filter(
-                scl, 3))
+            sif_merged.source_counts.apply(lambda scl: _reader_count_filter(scl, 3))
         ].index.to_list()
     )
     t.update()
