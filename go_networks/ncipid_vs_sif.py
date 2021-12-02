@@ -31,6 +31,13 @@ def _belief_filter(bl: Union[List[float], float], bc: float) -> bool:
     return False if pd.isna(bl) else bl > bc
 
 
+def _reader_count_filter(scl: List[Dict[str, int]], minc: int) -> bool:
+    for scd in scl:
+        if scd is not None and len(set(scd) & set(reader_sources)) >= minc:
+            return True
+    return False
+
+
 def _normalize(db_name: str) -> str:
     # Normalize the ns string to be the same as the INDRA SIF dump
 
