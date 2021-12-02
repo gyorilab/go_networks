@@ -190,7 +190,6 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
     logger.info("Adding edges to the CX SIF input")
     nedges = len(cx.edges)
     for e in tqdm(cx.edges, total=nedges):
-        # TodO: add support for undirected edges (i.e. complexes)
         ed = cx.get_edge(e)
         s, interaction, t = ed["s"], ed["i"], ed["t"]
 
@@ -222,7 +221,7 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
 
     # Create a DataFrame
     logger.info("Creating the CX DataFrame")
-    return pd.DataFrame(
+    cx_sif = pd.DataFrame(
         {
             "agA_name": s_names,
             "agA_ns": s_ns_list,
@@ -233,6 +232,11 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
             "interaction": int_list,
         }
     )
+
+    # Drop duplicates and reset the index
+    cx_sif.drop_duplicates(inplace=True)
+    cx_sif.reset_index(inplace=True, drop=True)
+    return cx_sif
 
 
 def main(sif_file, ncipid_file, merge_how="outer"):
