@@ -453,7 +453,9 @@ def venn_plots(merged_df: pd.DataFrame, out_dir: str):
         )
         ax.set_title(title)
     fig.tight_layout()
-    fig.savefig(os.path.join(out_dir, "venn_plots.png"))
+    outpath = os.path.join(out_dir, "venn_plots.png")
+    fig.savefig(outpath)
+    logger.info(f"Saved venn diagrams to {outpath}")
 
 
 if __name__ == "__main__":
