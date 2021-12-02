@@ -31,11 +31,21 @@ def _belief_filter(bl: Union[List[float], float], bc: float) -> bool:
     return False if pd.isna(bl) else bl > bc
 
 
-def _reader_count_filter(scl: List[Dict[str, int]], minc: int) -> bool:
+def _source_count_filter(scl: List[Dict[str, int]], minc: int, sources: List[
+    str]) \
+        -> bool:
     for scd in scl:
-        if scd is not None and len(set(scd) & set(reader_sources)) >= minc:
+        if scd is not None and len(set(scd) & set(sources)) >= minc:
             return True
     return False
+
+
+def _reader_count_filter(scl: List[Dict[str, int]], minc: int) -> bool:
+    return _source_count_filter(scl, minc, reader_sources)
+
+
+def _db_count_filter(scl: List[Dict[str, int]], minc: int) -> bool:
+    return _source_count_filter(scl, minc, db_sources)
 
 
 def _normalize(db_name: str) -> str:
