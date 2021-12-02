@@ -253,6 +253,7 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
             t_ns_list.append(s_ns)
             t_id_list.append(s_id)
             int_list.append(interaction)
+            pmid_list.append(citations)
 
     # Create a DataFrame
     logger.info("Creating the CX DataFrame")
