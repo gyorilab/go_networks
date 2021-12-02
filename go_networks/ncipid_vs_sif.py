@@ -247,6 +247,50 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
     return cx_sif
 
 
+def merge_dfs(sif, cx, merge_how='outer') -> pd.DataFrame:
+    # Add a new columns to both of the data frames that maps statement
+    # type/interaction to boolean indicating if the interaction is directed
+    # direction of the interaction
+    logger.info('Adding directed column to the DataFrames')
+    sif["directed"] = sif.stmt_type != "Complex"
+    cx["directed"] = cx.interaction != "in-complex-with"
+
+    # Group the CX SIF by entity pair A B and directed
+    logger.info('Grouping the CX SIF by entity pair A B and directed')
+    cx = (
+        cx.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+        .aggregate({"interaction": pd.Series.tolist})
+        .reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+    )
+
+    # Group the INDRA SIF by entity and stmt type
+    logger.info('Grouping the INDRA SIF by entity and stmt type')
+    sif = (
+        sif.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+        .aggregate(
+            {
+                "evidence_count": np.sum,
+                "stmt_hash": pd.Series.tolist,
+                "belief": pd.Series.tolist,
+                "source_counts": pd.Series.tolist,
+                "stmt_type": pd.Series.tolist,
+            }
+        )
+        .reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+    )
+
+    # Merge the two DataFrames on A-B pairs + interaction type
+    logger.info("Merging the CX SIF with the INDRA SIF")
+    merged_df = sif.merge(
+        cx,
+        on=["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"],
+        how=merge_how,
+        suffixes=("_sif", "_cx"),
+        indicator=True,
+    )
+    return merged_df
+
+
 def main(sif_file, ncipid_file, merge_how="outer"):
     """Convert the nci-pid CX network to a SIF file and merge with the INDRA SIF
 
