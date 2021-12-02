@@ -36,9 +36,9 @@ def _belief_filter(bl: Union[List[float], float], bc: float) -> bool:
     return False if pd.isna(bl) else bl > bc
 
 
-def _source_count_filter(scl: List[Dict[str, int]], minc: int, sources: List[
-    str]) \
-        -> bool:
+def _source_count_filter(
+    scl: List[Dict[str, int]], minc: int, sources: List[str]
+) -> bool:
     for scd in scl:
         if scd is not None and len(set(scd) & set(sources)) >= minc:
             return True
@@ -275,25 +275,26 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
     return cx_sif
 
 
-def merge_dfs(sif, cx, merge_how='outer') -> pd.DataFrame:
+def merge_dfs(sif, cx, merge_how="outer") -> pd.DataFrame:
     # Add a new columns to both of the data frames that maps statement
     # type/interaction to boolean indicating if the interaction is directed
     # direction of the interaction
-    logger.info('Adding directed column to the DataFrames')
+    logger.info("Adding directed column to the DataFrames")
     sif["directed"] = sif.stmt_type != "Complex"
     cx["directed"] = cx.interaction != "in-complex-with"
 
     # Group the CX SIF by entity pair A B and directed
-    logger.info('Grouping the CX SIF by entity pair A B and directed')
+    logger.info("Grouping the CX SIF by entity pair A B and directed")
     cx = (
         cx.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
         # Aggregate pmids to list of lists
-        .aggregate({"interaction": pd.Series.tolist, "pmids": pd.Series.tolist})
-        .reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+        .aggregate(
+            {"interaction": pd.Series.tolist, "pmids": pd.Series.tolist}
+        ).reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
     )
 
     # Group the INDRA SIF by entity and stmt type
-    logger.info('Grouping the INDRA SIF by entity and stmt type')
+    logger.info("Grouping the INDRA SIF by entity and stmt type")
     sif = (
         sif.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
         .aggregate(
