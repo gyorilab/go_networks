@@ -6,6 +6,7 @@ import logging
 import pickle
 from typing import Tuple, Optional, List, Dict
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -282,11 +283,39 @@ def main(sif_file, ncipid_file, merge_how="outer"):
     logger.info("Building CX SIF file")
     cx_sif = build_cx_sif(nci_cx, node_id_to_entity)
 
-    # Merge the two DataFrames on A-B pairs (look at depmap_analysis.)
+    # Add a new columns to both of the data frames that maps statement
+    # type/interaction to boolean indicating if the interaction is directed
+    # direction of the interaction
+    sif_df["directed"] = sif_df.stmt_type != "Complex"
+    cx_sif["directed"] = cx_sif.interaction != "in-complex-with"
+
+    # Group the CX SIF by entity pair A B and directed
+    cx_sif_grouped = (
+        cx_sif.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+        .aggregate({"interaction": pd.Series.tolist})
+        .reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+    )
+
+    # Group the INDRA SIF by entity and stmt type
+    sif_df_grouped = (
+        sif_df.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+        .aggregate(
+            {
+                "evidence_count": np.sum,
+                "stmt_hash": pd.Series.tolist,
+                "belief": pd.Series.tolist,
+                "source_counts": pd.Series.tolist,
+                "stmt_type": pd.Series.tolist,
+            }
+        )
+        .reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+    )
+
+    # Merge the two DataFrames on A-B pairs + interaction type
     logger.info("Merging the CX SIF with the INDRA SIF")
-    return sif_df.merge(
-        cx_sif,
-        on=["agA_ns", "agA_id", "agB_ns", "agB_id"],
+    return sif_df_grouped.merge(
+        cx_sif_grouped,
+        on=["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"],
         how=merge_how,
         suffixes=("_sif", "_cx"),
         indicator=True,
