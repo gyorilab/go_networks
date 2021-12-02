@@ -2,17 +2,22 @@
 Load the nci-pid CX network and convert it to a SIF file so be compared with
 the INDRA SIF dump.
 """
+import argparse
 import logging
+import os
 import pickle
-from typing import Tuple, Optional, List, Dict
+from typing import Tuple, Optional, List, Dict, Union
 
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
+from matplotlib_venn import venn2
 from tqdm import tqdm
 
 from indra.statements.agent import default_ns_order
 from indra.ontology.bio import bio_ontology
 from indra.preassembler.grounding_mapper.gilda import get_grounding
+from indra.util.statement_presentation import reader_sources, db_sources
 
 from protmapper.uniprot_client import get_primary_id
 
@@ -357,40 +362,135 @@ def main(sif_file, ncipid_file, merge_how="outer"):
     logger.info("Building CX SIF file")
     cx_sif = build_cx_sif(nci_cx, node_id_to_entity)
 
-    # Add a new columns to both of the data frames that maps statement
-    # type/interaction to boolean indicating if the interaction is directed
-    # direction of the interaction
-    sif_df["directed"] = sif_df.stmt_type != "Complex"
-    cx_sif["directed"] = cx_sif.interaction != "in-complex-with"
+    # Merge the two data frames
+    return merge_dfs(sif_df, cx_sif, merge_how=merge_how)
 
-    # Group the CX SIF by entity pair A B and directed
-    cx_sif_grouped = (
-        cx_sif.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
-        .aggregate({"interaction": pd.Series.tolist})
-        .reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+
+def venn_plots(merged_df: pd.DataFrame, out_dir: str):
+    """Plot the venn diagrams for the given merged_df"""
+    # Gather index sets for venn plotting
+    logger.info("Gathering index sets for venn plotting")
+    t = tqdm(total=9)
+    cx_tot_ix = set(merged_df.query("_merge in ['right_only', 'both']").index.to_list())
+    t.update()
+    sif_merged: pd.DataFrame = merged_df.query("_merge in ['left_only', 'both']")
+    t.update()
+    sif_tot_ix = set(sif_merged.index.to_list())
+    t.update()
+
+    # Belief cutoffs
+    sif_b7_ix = set(
+        sif_merged[
+            sif_merged.belief.apply(lambda bl: _belief_filter(bl, 0.7))
+        ].index.to_list()
     )
+    t.update()
 
-    # Group the INDRA SIF by entity and stmt type
-    sif_df_grouped = (
-        sif_df.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
-        .aggregate(
-            {
-                "evidence_count": np.sum,
-                "stmt_hash": pd.Series.tolist,
-                "belief": pd.Series.tolist,
-                "source_counts": pd.Series.tolist,
-                "stmt_type": pd.Series.tolist,
-            }
+    sif_b9_ix = set(
+        sif_merged[
+            sif_merged.belief.apply(lambda bl: _belief_filter(bl, 0.9))
+        ].index.to_list()
+    )
+    t.update()
+
+    sif_b99_ix = set(
+        sif_merged[
+            sif_merged.belief.apply(lambda bl: _belief_filter(bl, 0.99))
+        ].index.to_list()
+    )
+    t.update()
+
+    # Has at least two readers in support (per hash, not combined e.g. not
+    # {'sparser': 1} {'reach': 2} combined, but rather:
+    # any(len(set(readers) & set(sc)) >= 2
+    #     for sc in [{'sparser': 1}, {'reach': 2}])
+    sif_min2_readers_ix = set(
+        sif_merged[
+            sif_merged.source_counts.apply(lambda scl: _reader_count_filter(scl, 2))
+        ].index.to_list()
+    )
+    t.update()
+
+    sif_min3_readers_ix = set(
+        sif_merged[
+            sif_merged.source_counts.apply(lambda scl: _reader_count_filter(
+                scl, 3))
+        ].index.to_list()
+    )
+    t.update()
+
+    # Has DB support
+    sif_has_db_ix = set(
+        sif_merged[
+            sif_merged.source_counts.apply(lambda scl: _db_count_filter(scl, 1))
+        ].index.to_list()
+    )
+    t.close()
+
+    # Plot the cx sif indices vs each of the sif indices in venn diagrams in
+    # subplots
+    logger.info("Plotting the venn diagrams")
+    fig, axs = plt.subplots(nrows=3, ncols=3, figsize=(10, 10))
+    axs = axs.flatten()
+    for i, (ix, title) in enumerate(
+        [
+            (sif_tot_ix, "Unfiltered"),
+            (sif_b7_ix, "Belief > 0.7"),
+            (sif_b9_ix, "Belief > 0.9"),
+            (sif_b99_ix, "Belief > 0.99"),
+            (sif_min2_readers_ix, "2+ Readers"),
+            (sif_min3_readers_ix, "3+ Readers"),
+            (sif_has_db_ix, "Has DB Support"),
+        ]
+    ):
+        ax = axs[i]
+        venn2(
+            subsets=(cx_tot_ix, ix),
+            set_labels=("CX SIF", title),
+            ax=ax,
         )
-        .reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
-    )
+        ax.set_title(title)
+    fig.tight_layout()
+    fig.savefig(os.path.join(out_dir, "venn_plots.png"))
 
-    # Merge the two DataFrames on A-B pairs + interaction type
-    logger.info("Merging the CX SIF with the INDRA SIF")
-    return sif_df_grouped.merge(
-        cx_sif_grouped,
-        on=["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"],
-        how=merge_how,
-        suffixes=("_sif", "_cx"),
-        indicator=True,
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Merge the INDRA SIF with the nci-pid CX SIF"
     )
+    parser.add_argument(
+        "sif_file",
+        help="The INDRA SIF dump file location",
+    )
+    parser.add_argument(
+        "ncipid_file",
+        help="The nci-pid CX dump file location",
+    )
+    parser.add_argument(
+        "--merge-how",
+        help="How to merge the INDRA SIF with the nci-pid CX SIF. This is "
+        "passed to the 'how' parameter for pandas.DataFrame.merge(). The "
+        "sif dump is 'left' and the nci-pid CX SIF is 'right': "
+        "sif_df.merge(cx_df, how=merge_how)",
+        default="outer",
+    )
+    parser.add_argument(
+        "--out-dir",
+        help="The output directory for the merged dataframe and plots",
+        default=".",
+    )
+    args = parser.parse_args()
+
+    # Run the main function if the dataframe does not already exist
+    if not os.path.exists(os.path.join(args.out_dir, "merged_df.pkl")):
+        df = main(
+            args.sif_file,
+            args.ncipid_file,
+            merge_how=args.merge_how,
+        )
+        df.to_pickle(os.path.join(args.out_dir, "merged_df.pkl"))
+    else:
+        df = pd.read_pickle(os.path.join(args.out_dir, "merged_df.pkl"))
+
+    # Plot the venn diagrams
+    venn_plots(merged_df=df, out_dir=args.out_dir)
