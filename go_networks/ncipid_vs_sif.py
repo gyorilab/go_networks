@@ -25,6 +25,12 @@ def _rank(list_of_names: List[str], name) -> int:
     return list_of_names.index(name) if name in list_of_names else len(list_of_names)
 
 
+def _belief_filter(bl: Union[List[float], float], bc: float) -> bool:
+    if isinstance(bl, list):
+        return False if all(pd.isna(bl)) else any(b > bc for b in bl)
+    return False if pd.isna(bl) else bl > bc
+
+
 def _normalize(db_name: str) -> str:
     # Normalize the ns string to be the same as the INDRA SIF dump
 
