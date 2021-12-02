@@ -161,6 +161,7 @@ def get_node_mapping(
 
     id_to_entity = {}
     nnodes = len(cx.nodes)
+    bio_ontology.initialize()
     logger.info("Mapping nodes to entities")
     for node in tqdm(cx.nodes, total=nnodes):
         node_meta = cx.get_node(node)
