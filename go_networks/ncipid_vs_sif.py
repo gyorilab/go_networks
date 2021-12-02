@@ -194,6 +194,7 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
     t_ns_list = []
     t_id_list = []
     int_list = []
+    pmid_list = []
 
     logger.info("Adding edges to the CX SIF input")
     nedges = len(cx.edges)
@@ -207,6 +208,9 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
         if s_entity is None or t_entity is None:
             continue
 
+        citations = cx.get_edge_attribute_value(e, "citation")
+        assert isinstance(citations, list)
+
         s_name, s_ns, s_id = s_entity
         t_name, t_ns, t_id = t_entity
         s_names.append(s_name)
@@ -216,6 +220,7 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
         t_ns_list.append(t_ns)
         t_id_list.append(t_id)
         int_list.append(interaction)
+        pmid_list.append(citations)
 
         # If the interaction is a complex, add the reverse edge as well
         if interaction == "in-complex-with":
@@ -238,6 +243,7 @@ def build_cx_sif(cx, node_id_to_entity) -> pd.DataFrame:
             "agB_ns": t_ns_list,
             "agB_id": t_id_list,
             "interaction": int_list,
+            "pmids": pmid_list,
         }
     )
 
@@ -259,7 +265,8 @@ def merge_dfs(sif, cx, merge_how='outer') -> pd.DataFrame:
     logger.info('Grouping the CX SIF by entity pair A B and directed')
     cx = (
         cx.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
-        .aggregate({"interaction": pd.Series.tolist})
+        # Aggregate pmids to list of lists
+        .aggregate({"interaction": pd.Series.tolist, "pmids": pd.Series.tolist})
         .reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
     )
 
