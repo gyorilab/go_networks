@@ -285,20 +285,31 @@ def merge_dfs(sif, cx, merge_how="outer") -> pd.DataFrame:
     sif["directed"] = sif.stmt_type != "Complex"
     cx["directed"] = cx.interaction != "in-complex-with"
 
+    groupby_cols = [
+        "agA_name",
+        "agA_ns",
+        "agA_id",
+        "agB_name",
+        "agB_ns",
+        "agB_id",
+        "directed",
+    ]
+    mergeon_cols = ["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"]
+
     # Group the CX SIF by entity pair A B and directed
-    logger.info("Grouping the CX SIF by entity pair A B and directed")
+    logger.info("Grouping the CX SIF by entity pair")
     cx = (
-        cx.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+        cx.groupby(groupby_cols)
         # Aggregate pmids to list of lists
         .aggregate(
             {"interaction": pd.Series.tolist, "pmids": pd.Series.tolist}
-        ).reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+        ).reset_index(groupby_cols)
     )
 
     # Group the INDRA SIF by entity and stmt type
-    logger.info("Grouping the INDRA SIF by entity and stmt type")
+    logger.info("Grouping the INDRA SIF by entity pair")
     sif = (
-        sif.groupby(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+        sif.groupby(groupby_cols)
         .aggregate(
             {
                 "evidence_count": np.sum,
@@ -308,14 +319,14 @@ def merge_dfs(sif, cx, merge_how="outer") -> pd.DataFrame:
                 "stmt_type": pd.Series.tolist,
             }
         )
-        .reset_index(["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"])
+        .reset_index(groupby_cols)
     )
 
     # Merge the two DataFrames on A-B pairs + interaction type
     logger.info("Merging the CX SIF with the INDRA SIF")
     merged_df = sif.merge(
         cx,
-        on=["agA_ns", "agA_id", "agB_ns", "agB_id", "directed"],
+        on=mergeon_cols,
         how=merge_how,
         suffixes=("_sif", "_cx"),
         indicator=True,
