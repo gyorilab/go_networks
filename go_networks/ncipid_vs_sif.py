@@ -433,6 +433,7 @@ def venn_plots(merged_df: pd.DataFrame, out_dir: str):
             sif_merged.source_counts.apply(lambda scl: _db_count_filter(scl, 1))
         ].index.to_list()
     )
+    t.update()
     t.close()
 
     # Plot the cx sif indices vs each of the sif indices in venn diagrams in
