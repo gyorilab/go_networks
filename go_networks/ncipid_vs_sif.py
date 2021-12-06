@@ -10,12 +10,14 @@ import pickle
 from collections import Counter
 from typing import Tuple, Optional, List, Dict, Union
 
+import ndex2.client
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib_venn import venn2
 from tqdm import tqdm
 
+from indra.databases import ndex_client
 from indra.statements.agent import default_ns_order
 from indra.ontology.bio import bio_ontology
 from indra.preassembler.grounding_mapper.gilda import get_grounding
@@ -28,13 +30,22 @@ from ndex2 import create_nice_cx_from_file
 logger = logging.getLogger(__name__)
 
 
-NDEX_BASE_URL = "http://public.ndexbio.org/v2"
-NETWORK_ENDPOINT = f"{NDEX_BASE_URL}/network"
-NETWORKSET_ENDPOINT = f"{NDEX_BASE_URL}/networkset"
+NDEX_BASE_URL_V2 = "http://public.ndexbio.org/v2"
+NDEX_BASE_URL = "http://public.ndexbio.org"
+NETWORK_ENDPOINT = f"{NDEX_BASE_URL_V2}/network"
+NETWORKSET_ENDPOINT = f"{NDEX_BASE_URL_V2}/networkset"
 NCIPID_SET = "8a2d7ee9-1513-11e9-bb6a-0ac135e8bacf"
 NDEX_FTP_BASE = (
     "ftp://ftp.ndexbio.org/NCI_PID_BIOPAX_2016-06-08-PC2v8-API/{pathway_name}.owl.gz"
 )
+
+
+def _get_default_ndex_args() -> Dict[str, str]:
+    usr, pwd = ndex_client.get_default_ndex_cred(ndex_cred=None)
+    return {"username": usr, "password": pwd, "server": NDEX_BASE_URL}
+
+
+NDEX_ARGS = _get_default_ndex_args()
 
 
 def _rank(list_of_names: List[str], name) -> int:
@@ -79,6 +90,15 @@ def _ndex_ftp_owl_url(pathway_name: str) -> str:
     # URL encode the pathway name
     url_encoded = parse.quote(pathway_name)
     return NDEX_FTP_BASE.format(pathway_name=url_encoded)
+
+
+def _get_networks_in_set(network_set_id: str) -> List[str]:
+    """Get the UUIDs of the networks in a network set."""
+    nd = ndex2.client.Ndex2(
+        **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
+    )
+    network_set = nd.get_networkset(network_set_id)
+    return network_set["networks"]
 
 
 def _get_grounding(name):
