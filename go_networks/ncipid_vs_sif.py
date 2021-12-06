@@ -28,7 +28,11 @@ from ndex2 import create_nice_cx_from_file
 logger = logging.getLogger(__name__)
 
 
-FTP_BASE = (
+NDEX_BASE_URL = "http://public.ndexbio.org/v2"
+NETWORK_ENDPOINT = f"{NDEX_BASE_URL}/network"
+NETWORKSET_ENDPOINT = f"{NDEX_BASE_URL}/networkset"
+NCIPID_SET = "8a2d7ee9-1513-11e9-bb6a-0ac135e8bacf"
+NDEX_FTP_BASE = (
     "ftp://ftp.ndexbio.org/NCI_PID_BIOPAX_2016-06-08-PC2v8-API/{pathway_name}.owl.gz"
 )
 
@@ -74,7 +78,7 @@ def _ndex_ftp_owl_url(pathway_name: str) -> str:
     """Get the url for the NDEx FTP owl file for a given pathway."""
     # URL encode the pathway name
     url_encoded = parse.quote(pathway_name)
-    return FTP_BASE.format(pathway_name=url_encoded)
+    return NDEX_FTP_BASE.format(pathway_name=url_encoded)
 
 
 def _get_grounding(name):
@@ -512,7 +516,7 @@ def identify_cx_graph_w_missing_edges(dir_path: str, edges):
     for cx_file in tqdm(
         Path(dir_path).glob("*.cx"), total=len(list(Path(dir_path).glob("*.cx")))
     ):
-        if cx_file == 'NCI_PID_Complete_Interactions.cx':
+        if cx_file == "NCI_PID_Complete_Interactions.cx":
             print(f"Skipping {cx_file}")
             continue
 
