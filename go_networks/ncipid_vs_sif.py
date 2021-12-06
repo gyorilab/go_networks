@@ -345,10 +345,10 @@ def main(sif_file, ncipid_file, merge_how="outer"):
     ncipid_file :
         The nci-pid CX dump file location
     merge_how :
-        How to merge the INDRA SIF with the nci-pid CX SIF. This is passed to
-        the "how" parameter for pandas.DataFrame.merge(). The sif dump is
-        "left" and the nci-pid CX SIF is "right":
-        sif_df.merge(cx_df, how=merge_how)
+        How to merge the INDRA SIF with the nci-pid CX SIF. Allowed values are
+        "outer", "left", "right", and "inner". This is passed to the "how"
+        parameter for pandas.DataFrame.merge(). The sif dump is "left" and
+        the nci-pid CX SIF is "right": sif_df.merge(cx_df, how=merge_how).
     """
     if merge_how not in ["left", "right", "outer", "inner", "cross"]:
         raise ValueError(
@@ -393,7 +393,7 @@ def venn_plots(merged_df: pd.DataFrame, out_dir: str):
     )
     t.update()
     sif_merged: pd.DataFrame = merged_df.query(
-        "_merge in ['left_only', " "'both'] & agA_ns == 'HGNC' & agB_ns == 'HGNC'"
+        "_merge in ['left_only', 'both'] & agA_ns == 'HGNC' & agB_ns == 'HGNC'"
     )
     t.update()
     sif_tot_ix = set(sif_merged.index.to_list())
