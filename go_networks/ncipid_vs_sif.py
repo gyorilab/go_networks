@@ -2,6 +2,7 @@
 Load the nci-pid CX network and convert it to a SIF file so be compared with
 the INDRA SIF dump.
 """
+from urllib import parse
 import argparse
 import logging
 import os
@@ -25,6 +26,11 @@ from protmapper.uniprot_client import get_primary_id
 from ndex2 import create_nice_cx_from_file
 
 logger = logging.getLogger(__name__)
+
+
+FTP_BASE = (
+    "ftp://ftp.ndexbio.org/NCI_PID_BIOPAX_2016-06-08-PC2v8-API/{pathway_name}.owl.gz"
+)
 
 
 def _rank(list_of_names: List[str], name) -> int:
@@ -62,6 +68,13 @@ def _normalize(db_name: str) -> str:
         return "UP"
     # Todo: Handle other namespaces as they are added
     return db_name
+
+
+def _ndex_ftp_owl_url(pathway_name: str) -> str:
+    """Get the url for the NDEx FTP owl file for a given pathway."""
+    # URL encode the pathway name
+    url_encoded = parse.quote(pathway_name)
+    return FTP_BASE.format(pathway_name=url_encoded)
 
 
 def _get_grounding(name):
