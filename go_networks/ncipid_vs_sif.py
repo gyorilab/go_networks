@@ -13,6 +13,7 @@ from typing import Tuple, Optional, List, Dict, Union
 import ndex2.client
 import numpy as np
 import pandas as pd
+from lxml import etree
 from matplotlib import pyplot as plt
 from matplotlib_venn import venn2
 from tqdm import tqdm
@@ -99,6 +100,25 @@ def _get_networks_in_set(network_set_id: str) -> List[str]:
     )
     network_set = nd.get_networkset(network_set_id)
     return network_set["networks"]
+
+
+def _get_ndex_ftp_uri(network_id: str) -> str:
+    """Get the info from the NDEx server for a given network."""
+    nd = ndex2.client.Ndex2(
+        **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
+    )
+    info_dict = nd.get_network_summary(network_id)
+    link_tag = None
+    for prop_dict in info_dict["properties"]:
+        if prop_dict["predicateString"] == "prov:wasDerivedFrom":
+            link_tag = prop_dict["value"]
+            break
+    if link_tag is None:
+        raise ValueError("Network has no uri")
+
+    # Extract the link from the tag
+    tag_element = etree.fromstring(link_tag)
+    return tag_element.values()[0]
 
 
 def _get_grounding(name):
