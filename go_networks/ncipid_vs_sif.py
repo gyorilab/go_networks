@@ -104,8 +104,19 @@ def _get_networks_in_set(network_set_id: str) -> List[str]:
     return network_set["networks"]
 
 
-def _get_ndex_ftp_uri(network_id: str) -> str:
-    """Get the info from the NDEx server for a given network."""
+def _get_ndex_graph_info(network_id: str) -> Tuple[str, str]:
+    """Get name and ftp url for a network
+
+    Parameters
+    ----------
+    network_id :
+        The UUID of the network
+
+    Returns
+    -------
+    :
+        Tuple of name and ftp url
+    """
     nd = ndex2.client.Ndex2(
         **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
     )
@@ -119,13 +130,17 @@ def _get_ndex_ftp_uri(network_id: str) -> str:
         raise ValueError("Network has no 'wasDerivedFrom' value")
 
     # Extract the link from the tag
-    tag_element = etree.fromstring(link_tag)
-    return tag_element.values()[0]
+    ftp_url = etree.fromstring(link_tag).values()[0]
+
+    # Extract the network name
+    network_name = info_dict["name"]
+
+    return network_name, ftp_url
 
 
 def _download_owl_file(uuid: str, out_file: str):
     # Get ftp url
-    url = _get_ndex_ftp_uri(uuid)
+    name, url = _get_ndex_graph_info(uuid)
 
     # Download the file to the given file path
     with closing(request.urlopen(url)) as r:
