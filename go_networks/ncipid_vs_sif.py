@@ -116,7 +116,7 @@ def _get_ndex_ftp_uri(network_id: str) -> str:
             link_tag = prop_dict["value"]
             break
     if link_tag is None:
-        raise ValueError("Network has no uri")
+        raise ValueError("Network has no 'wasDerivedFrom' value")
 
     # Extract the link from the tag
     tag_element = etree.fromstring(link_tag)
