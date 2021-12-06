@@ -2,7 +2,9 @@
 Load the nci-pid CX network and convert it to a SIF file so be compared with
 the INDRA SIF dump.
 """
-from urllib import parse
+import shutil
+from contextlib import closing
+from urllib import parse, request
 import argparse
 import logging
 import os
@@ -119,6 +121,16 @@ def _get_ndex_ftp_uri(network_id: str) -> str:
     # Extract the link from the tag
     tag_element = etree.fromstring(link_tag)
     return tag_element.values()[0]
+
+
+def _download_owl_file(uuid: str, out_file: str):
+    # Get ftp url
+    url = _get_ndex_ftp_uri(uuid)
+
+    # Download the file to the given file path
+    with closing(request.urlopen(url)) as r:
+        with open(out_file, 'wb') as f:
+            shutil.copyfileobj(r, f)
 
 
 def _get_grounding(name):
