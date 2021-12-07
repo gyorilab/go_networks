@@ -464,7 +464,18 @@ def merge_dfs(sif, cx, merge_how="outer") -> pd.DataFrame:
     return merged_df
 
 
-def get_merged_df(sif_file: str, ncipid_file: str, merge_how: str = "outer") -> pd.DataFrame:
+def get_merged_df(
+    sif_file: str,
+    ncipid_file: str,
+    out_dir: str,
+    merge_how: str = "outer",
+    regenerate: bool = False,
+) -> pd.DataFrame:
+    """Get the merged DataFrame from the SIF and CX files."""
+    merged_file = Path(out_dir).joinpath("merged_df.pkl")
+    if not regenerate and merged_file.exists():
+        return pd.read_pickle(merged_file)
+
     if merge_how not in ["left", "right", "outer", "inner", "cross"]:
         raise ValueError(
             f"Invalid merge_how value {merge_how}. Allowed "
@@ -493,7 +504,9 @@ def get_merged_df(sif_file: str, ncipid_file: str, merge_how: str = "outer") -> 
     cx_sif = build_cx_sif(nci_cx, node_id_to_entity)
 
     # Merge the two data frames
-    return merge_dfs(sif_df, cx_sif, merge_how=merge_how)
+    merged_df = merge_dfs(sif_df, cx_sif, merge_how=merge_how)
+    merged_df.to_pickle(merged_file.absolute().as_posix())
+    return merged_df
 
 
 def venn_plots(merged_df: pd.DataFrame, out_dir: str):
