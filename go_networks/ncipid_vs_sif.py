@@ -22,10 +22,12 @@ from matplotlib_venn import venn2
 from tqdm import tqdm
 
 from indra.databases import ndex_client
+from indra.statements import Statement
 from indra.statements.agent import default_ns_order
 from indra.ontology.bio import bio_ontology
 from indra.preassembler.grounding_mapper.gilda import get_grounding
 from indra.util.statement_presentation import reader_sources, db_sources
+from indra.sources.biopax import process_owl
 
 from protmapper.uniprot_client import get_primary_id
 
@@ -145,6 +147,12 @@ def _download_owl_file(ftp_url: str, out_file: str):
     with closing(request.urlopen(ftp_url)) as r:
         with open(out_file, "wb") as f:
             shutil.copyfileobj(r, f)
+
+
+def _get_nci_statements(owl_file: str) -> List[Statement]:
+    """Get statements from and OWL file using the biopax api"""
+    bp = process_owl(owl_file)
+    return bp.statements
 
 
 def _get_grounding(name):
