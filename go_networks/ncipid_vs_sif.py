@@ -560,18 +560,19 @@ def venn_plots(merged_df: pd.DataFrame, out_dir: str):
     logger.info(f"Saved venn diagrams to {outpath}")
 
 
-def get_missing_edges(merged_df: pd.DataFrame):
+def get_nci_only_edges(merged_df: pd.DataFrame):
     """Get the missing edges from the merged_df"""
     # Get the interactions that are missing in the INDRA SIF
-    nci_only_hgnc = merged_df[["agA_ns", "agA_id", "agB_ns", "agB_id", "interaction"]][
+    nci_only_hgnc = merged_df[["agA_name", "agB_name", "interaction"]][
         (merged_df.agA_ns == "HGNC")
         & (merged_df.agB_ns == "HGNC")
         & (merged_df._merge == "right_only")
     ]
 
-    # Get the count for each interaction type
-    return sum(nci_only_hgnc.interaction.apply(Counter).values, Counter())
-
+    # Return a list of tuples of the missing edges with their interactions
+    return list(
+        map(tuple, nci_only_hgnc[["agA_name", "agB_name", "interaction"]].values)
+    )
 
 
 def identify_missing_edges_in_cx_graph(
