@@ -12,9 +12,9 @@ import os
 import pickle
 from typing import Tuple, Optional, List, Dict, Union
 
-import ndex2.client
 import numpy as np
 import pandas as pd
+from ndex2.client import Ndex2
 from ndex2.nice_cx_network import NiceCXNetwork
 from lxml import etree
 from matplotlib import pyplot as plt
@@ -98,20 +98,23 @@ def _ndex_ftp_owl_url(pathway_name: str) -> str:
     return NDEX_FTP_BASE.format(pathway_name=url_encoded)
 
 
-def _get_networks_in_set(network_set_id: str) -> List[str]:
+def _get_networks_in_set(network_set_id: str, client: Optional[Ndex2]) -> List[str]:
     """Get the UUIDs of the networks in a network set."""
-    nd = ndex2.client.Ndex2(
-        **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
-    )
-    network_set = nd.get_networkset(network_set_id)
+    if client is None:
+        client = Ndex2(
+            **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
+        )
+    network_set = client.get_networkset(network_set_id)
     return network_set["networks"]
 
 
-def _get_ndex_graph_info(network_id: str) -> Tuple[str, str]:
+def _get_ndex_graph_info(network_id: str, client: Optional[Ndex2]) -> Tuple[str, str]:
     """Get name and ftp url for a network
 
     Parameters
     ----------
+    client : ndex2.client.Ndex2
+        An NDEx client
     network_id :
         The UUID of the network
 
@@ -120,10 +123,12 @@ def _get_ndex_graph_info(network_id: str) -> Tuple[str, str]:
     :
         Tuple of name and ftp url
     """
-    nd = ndex2.client.Ndex2(
-        **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
-    )
-    info_dict = nd.get_network_summary(network_id)
+    if client is None:
+        client = Ndex2(
+            **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
+        )
+
+    info_dict = client.get_network_summary(network_id)
     link_tag = None
     for prop_dict in info_dict["properties"]:
         if prop_dict["predicateString"] == "prov:wasDerivedFrom":
