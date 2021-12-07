@@ -1,6 +1,7 @@
 """
-Load the nci-pid CX network and convert it to a SIF file so be compared with
-the INDRA SIF dump.
+Compare  the NCIPID CX network on NDEx with the INDRA Sif dump in order to
+find the sets of interactions for each of them and compare intersection and
+differences.
 """
 import shutil
 from contextlib import closing
@@ -9,7 +10,6 @@ import argparse
 import logging
 import os
 import pickle
-from collections import Counter
 from typing import Tuple, Optional, List, Dict, Union
 
 import ndex2.client
@@ -143,7 +143,7 @@ def _download_owl_file(ftp_url: str, out_file: str):
     """Download the owl file for a network from NDEx. and return the name"""
     # Download the file at the url for the ftp server to the given file path
     with closing(request.urlopen(ftp_url)) as r:
-        with open(out_file, 'wb') as f:
+        with open(out_file, "wb") as f:
             shutil.copyfileobj(r, f)
 
 
@@ -603,7 +603,8 @@ def identify_missing_edges_in_cx_graph(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Merge the INDRA SIF with the nci-pid CX SIF"
+        description="Merge the INDRA SIF with the nci-pid CX SIF and find "
+                    "the sets of interactions in INDRA vs NCIPID"
     )
     parser.add_argument(
         "sif_file",
