@@ -663,14 +663,44 @@ def main(sif_file, ncipid_file, network_set_id, out_dir, merge_how="outer",
 
     # Get the pairs that are only in the NCI graphs
     nci_only_pairs = get_nci_only_edges(merged_df)
+    client = Ndex2(
+        **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
+    )
 
     # Get the network ids for the NCI graphs
-    nci_graph_ids = _get_networks_in_set(network_set_id)
+    nci_graph_ids = _get_networks_in_set(network_set_id, client)
 
-    # Get the owl file if the graph has any nci only edges
-    output = {}
-    for graph_id in nci_graph_ids:
-        #
+    # For each graph, download and unzip the owl file, get the statements from
+    # it and pickle those, save as a csv the nci only edges
+    for graph_id in tqdm(nci_graph_ids):
+        # Get the name and owl ftp url
+        name, owl_url = _get_ndex_graph_info(graph_id, client)
+        graph_dir = os.path.join(out_dir, name)
+        if not os.path.exists(graph_dir):
+            os.makedirs(graph_dir)
+
+        # Download and unzip the owl file
+        owl_file_path = _download_extract_owl_file(owl_url, graph_dir)
+
+        # Get the statements from the owl file and pickle them
+        statements = _get_nci_statements(owl_file_path)
+        if statements:
+            pickle_path = os.path.join(graph_dir, "statements.pkl")
+            with open(pickle_path, "wb") as f:
+                pickle.dump(statements, f)
+
+        # Get the cx graph
+        cx = _get_cx_graph_from_server(graph_id, graph_dir)
+
+        # Get the nci only edges
+        nci_only_edges = identify_missing_edges_in_cx_graph(cx, nci_only_pairs)
+
+        # Write the nci only edges to a csv
+        nci_only_edges_path = os.path.join(graph_dir, "nci_only_edges.csv")
+        with open(nci_only_edges_path, "w") as f:
+            writer = csv.writer(f, delimiter=",")
+            writer.writerow(["source", "target"])
+            writer.writerows(nci_only_edges)
 
 
 if __name__ == "__main__":
