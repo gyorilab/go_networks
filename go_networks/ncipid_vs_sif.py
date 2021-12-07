@@ -470,23 +470,31 @@ def get_merged_df(
     out_dir: str,
     merge_how: str = "outer",
     regenerate: bool = False,
+    plot_venn: bool = False,
 ) -> pd.DataFrame:
     """Get the merged DataFrame from the SIF and CX files."""
     merged_file = Path(out_dir).joinpath("merged_df.pkl")
     if not regenerate and merged_file.exists():
-        return pd.read_pickle(merged_file)
+        logger.info(
+            f"Loading the merged DataFrame from local cache "
+            f"{merged_file.absolute().as_posix()}"
+        )
+        merged_df = pd.read_pickle(merged_file)
+
+        # Do venn diagram plotting if requested
+        if plot_venn:
+            venn_plots(merged_df, out_dir)
+        return merged_df
 
     if merge_how not in ["left", "right", "outer", "inner", "cross"]:
         raise ValueError(
             f"Invalid merge_how value {merge_how}. Allowed "
             f"values are 'left', 'right', 'outer', 'inner', 'cross'"
         )
-    # Load the CX network
-    nci_cx = create_nice_cx_from_file(ncipid_file)
 
     # Load the INDRA SIF dump
-    with open(sif_file, "rb") as fh:
-        sif_df: pd.DataFrame = pickle.load(fh)
+    logger.info(f"Loading the INDRA SIF from {sif_file}")
+    sif_df = pd.read_pickle(sif_file)
 
     # Make a name to NS-ID mapping from the sif dump
     sif_ns_id_map = {
@@ -495,6 +503,10 @@ def get_merged_df(
             set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
         )
     }
+
+    # Load the CX network
+    logger.info(f"Loading the CX network from {ncipid_file}")
+    nci_cx = create_nice_cx_from_file(ncipid_file)
 
     # Get node id to entity map
     node_id_to_entity = get_node_mapping(nci_cx, sif_ns_id_map)
@@ -506,6 +518,11 @@ def get_merged_df(
     # Merge the two data frames
     merged_df = merge_dfs(sif_df, cx_sif, merge_how=merge_how)
     merged_df.to_pickle(merged_file.absolute().as_posix())
+
+    # Do venn diagram plotting if requested
+    if plot_venn:
+        venn_plots(merged_df, out_dir)
+
     return merged_df
 
 
