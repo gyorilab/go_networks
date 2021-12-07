@@ -3,7 +3,9 @@ Compare  the NCIPID CX network on NDEx with the INDRA Sif dump in order to
 find the sets of interactions for each of them and compare intersection and
 differences.
 """
+import csv
 import gzip
+import json
 import shutil
 from contextlib import closing
 from pathlib import Path
@@ -16,6 +18,7 @@ from typing import Tuple, Optional, List, Dict, Union
 
 import numpy as np
 import pandas as pd
+from ndex2 import create_nice_cx_from_server
 from ndex2.client import Ndex2
 from ndex2.nice_cx_network import NiceCXNetwork
 from lxml import etree
@@ -146,6 +149,20 @@ def _get_ndex_graph_info(network_id: str, client: Optional[Ndex2]) -> Tuple[str,
     network_name = info_dict["name"]
 
     return network_name, ftp_url
+
+
+def _get_cx_graph_from_server(network_id: str, out_dir: str) -> NiceCXNetwork:
+    """Get a NiceCXNetwork from an NDEx network."""
+    # Check if the network is already in the local cache
+    cx_file = Path(out_dir).joinpath(f"{network_id}.cx")
+    if Path(cx_file).exists():
+        return create_nice_cx_from_file(cx_file)
+
+    # Otherwise, download the network from the server and dump it to the local cache
+    cx = create_nice_cx_from_server(**NDEX_ARGS, uuid=network_id)
+    with cx_file.open("w") as f:
+        json.dump(cx.to_cx(), f)
+    return cx
 
 
 def _download_extract_owl_file(ftp_url: str, out_dir: str) -> str:
