@@ -15,6 +15,7 @@ from typing import Tuple, Optional, List, Dict, Union
 import ndex2.client
 import numpy as np
 import pandas as pd
+from ndex2.nice_cx_network import NiceCXNetwork
 from lxml import etree
 from matplotlib import pyplot as plt
 from matplotlib_venn import venn2
@@ -572,42 +573,31 @@ def get_missing_edges(merged_df: pd.DataFrame):
     return sum(nci_only_hgnc.interaction.apply(Counter).values, Counter())
 
 
-def identify_cx_graph_w_missing_edges(dir_path: str, edges):
-    from pathlib import Path
 
-    # Edges are hgnc symbols
-    # Loop all cx files in the directory
-    graph_files = []
-    for cx_file in tqdm(
-        Path(dir_path).glob("*.cx"), total=len(list(Path(dir_path).glob("*.cx")))
-    ):
-        if cx_file == "NCI_PID_Complete_Interactions.cx":
-            print(f"Skipping {cx_file}")
-            continue
+def identify_missing_edges_in_cx_graph(
+    cx_graph: NiceCXNetwork, edges
+) -> List[Tuple[str, str]]:
 
-        # Load the cx file
-        cx_graph = create_nice_cx_from_file(cx_file)
+    # Get node to name mapping
+    node_to_name = {node: cx_graph.get_node(node)["n"] for node in cx_graph.nodes}
 
-        # Get node to name mapping
-        node_to_name = {node: cx_graph.get_node(node)["n"] for node in cx_graph.nodes}
+    nci_only_edges = set()
 
-        # Check if the edges are in the graph
-        for e_id in cx_graph.edges:
-            # Get source and target of edge
-            ed = cx_graph.get_edge(e_id)
-            source, target = ed["s"], ed["t"]
-            source_name = node_to_name[source]
-            target_name = node_to_name[target]
+    # Check if the edges are in the graph
+    for e_id in cx_graph.edges:
+        # Get source and target of edge
+        ed = cx_graph.get_edge(e_id)
+        source, target = ed["s"], ed["t"]
+        source_name = node_to_name[source]
+        target_name = node_to_name[target]
 
-            # Check if the edge is in the list of edges (check reverse edge
-            # as well)
-            if (source_name, target_name) in edges:
-                graph_files.append((cx_file, (source_name, target_name)))
-            elif (target_name, source_name) in edges:
-                graph_files.append((cx_file, (target_name, source_name)))
+        # Check if the edge is in the list of edges (check reverse edge as well)
+        if (source_name, target_name) in edges:
+            nci_only_edges.add((source_name, target_name))
+        elif (target_name, source_name) in edges:
+            nci_only_edges.add((target_name, source_name))
 
-    print(f"Found {len(graph_files)} missing edges")
-    return graph_files
+    return list(sorted(nci_only_edges, key=lambda x: x[0]))
 
 
 if __name__ == "__main__":
