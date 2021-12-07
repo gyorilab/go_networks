@@ -426,21 +426,7 @@ def merge_dfs(sif, cx, merge_how="outer") -> pd.DataFrame:
     return merged_df
 
 
-def main(sif_file, ncipid_file, merge_how="outer"):
-    """Convert the nci-pid CX network to a SIF file and merge with the INDRA SIF
-
-    Parameters
-    ----------
-    sif_file :
-        The INDRA SIF dump file location
-    ncipid_file :
-        The nci-pid CX dump file location
-    merge_how :
-        How to merge the INDRA SIF with the nci-pid CX SIF. Allowed values are
-        "outer", "left", "right", and "inner". This is passed to the "how"
-        parameter for pandas.DataFrame.merge(). The sif dump is "left" and
-        the nci-pid CX SIF is "right": sif_df.merge(cx_df, how=merge_how).
-    """
+def get_merged_df(sif_file: str, ncipid_file: str, merge_how: str = "outer") -> pd.DataFrame:
     if merge_how not in ["left", "right", "outer", "inner", "cross"]:
         raise ValueError(
             f"Invalid merge_how value {merge_how}. Allowed "
@@ -609,10 +595,48 @@ def identify_missing_edges_in_cx_graph(
     return list(sorted(nci_only_edges, key=lambda x: x[0]))
 
 
+def main(sif_file, ncipid_file, network_set_id, merge_how="outer",
+         save_merged_df=False, plot_venn=False):
+    """Compare NCI and INDRA Sif, get statements per NCI graph
+
+    Parameters
+    ----------
+    sif_file :
+        The INDRA SIF dump file location
+    ncipid_file :
+        The nci-pid CX dump file location
+    network_set_id :
+        The NCI network set id
+    merge_how :
+        How to merge the INDRA SIF with the nci-pid CX SIF. Allowed values are
+        "outer", "left", "right", and "inner". This is passed to the "how"
+        parameter for pandas.DataFrame.merge(). The sif dump is "left" and
+        the nci-pid CX SIF is "right": sif_df.merge(cx_df, how=merge_how).
+    save_merged_df :
+        Whether to save the merged DataFrame to a pickle file.
+    plot_venn :
+        Whether to plot the Venn diagram of the statements in the merged
+        DataFrame.
+    """
+    # Get the merged data frame
+    merged_df = get_merged_df(sif_file, ncipid_file, merge_how=merge_how)
+
+    # Get the pairs that are only in the NCI graphs
+    nci_only_pairs = get_nci_only_edges(merged_df)
+
+    # Get the network ids for the NCI graphs
+    nci_graph_ids = _get_networks_in_set(network_set_id)
+
+    # Get the owl file if the graph has any nci only edges
+    output = {}
+    for graph_id in nci_graph_ids:
+        #
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Merge the INDRA SIF with the nci-pid CX SIF and find "
-                    "the sets of interactions in INDRA vs NCIPID"
+        "the sets of interactions in INDRA vs NCIPID"
     )
     parser.add_argument(
         "sif_file",
@@ -623,6 +647,10 @@ if __name__ == "__main__":
         help="The nci-pid CX dump file location",
     )
     parser.add_argument(
+        "network_set_id",
+        help="The network set id to grab cx and owl files from",
+    )
+    parser.add_argument(
         "--merge-how",
         help="How to merge the INDRA SIF with the nci-pid CX SIF. This is "
         "passed to the 'how' parameter for pandas.DataFrame.merge(). The "
@@ -631,22 +659,25 @@ if __name__ == "__main__":
         default="outer",
     )
     parser.add_argument(
+        "--save-merged-df", action="store_true", help="Save the merged dataframe"
+    )
+    parser.add_argument(
+        "--plot-venn", action="store_true", help="Plot the venn diagrams"
+    )
+    parser.add_argument(
         "--out-dir",
-        help="The output directory for the merged dataframe and plots",
+        help="The output directory for the merged dataframe, the venn "
+        "diagrams and the dataframe of graph-interaction comparisons",
         default=".",
     )
     args = parser.parse_args()
 
     # Run the main function if the dataframe does not already exist
-    if not os.path.exists(os.path.join(args.out_dir, "merged_df.pkl")):
-        df = main(
-            args.sif_file,
-            args.ncipid_file,
-            merge_how=args.merge_how,
-        )
-        df.to_pickle(os.path.join(args.out_dir, "merged_df.pkl"))
-    else:
-        df = pd.read_pickle(os.path.join(args.out_dir, "merged_df.pkl"))
-
-    # Plot the venn diagrams
-    venn_plots(merged_df=df, out_dir=args.out_dir)
+    main(
+        args.sif_file,
+        args.ncipid_file,
+        args.network_set_id,
+        merge_how=args.merge_how,
+        save_merged_df=args.save_merged_df,
+        plot_venn=args.plot_venn,
+    )
