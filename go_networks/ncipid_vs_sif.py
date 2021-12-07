@@ -663,8 +663,15 @@ def identify_missing_edges_in_cx_graph(
     return list(sorted(nci_only_edges, key=lambda x: x[0]))
 
 
-def main(sif_file, ncipid_file, network_set_id, out_dir, merge_how="outer",
-         save_merged_df=False, plot_venn=False):
+def main(
+    sif_file,
+    ncipid_file,
+    network_set_id,
+    out_dir,
+    merge_how="outer",
+    regenerate_merged_df=False,
+    plot_venn=False,
+):
     """Compare NCI and INDRA Sif, get statements per NCI graph
 
     Parameters
@@ -682,17 +689,23 @@ def main(sif_file, ncipid_file, network_set_id, out_dir, merge_how="outer",
         "outer", "left", "right", and "inner". This is passed to the "how"
         parameter for pandas.DataFrame.merge(). The sif dump is "left" and
         the nci-pid CX SIF is "right": sif_df.merge(cx_df, how=merge_how).
-    save_merged_df :
+    regenerate_merged_df :
         Whether to save the merged DataFrame to a pickle file.
     plot_venn :
-        Whether to plot the Venn diagram of the statements in the merged
+        Whether to plot Venn diagrams of the interactions in the merged
         DataFrame.
     """
-    # Get the merged data frame
-    merged_df = get_merged_df(sif_file, ncipid_file, merge_how=merge_how)
-
     # Get the pairs that are only in the NCI graphs
-    nci_only_pairs = get_nci_only_edges(merged_df)
+    nci_only_pairs = get_nci_only_edges(
+        get_merged_df(
+            sif_file,
+            ncipid_file,
+            out_dir,
+            merge_how=merge_how,
+            regenerate=regenerate_merged_df,
+            plot_venn=plot_venn,
+        )
+    )
     client = Ndex2(
         **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
     )
@@ -759,7 +772,10 @@ if __name__ == "__main__":
         default="outer",
     )
     parser.add_argument(
-        "--save-merged-df", action="store_true", help="Save the merged dataframe"
+        "--regenerate-merged-df",
+        action="store_true",
+        help="Whether to regenerate the merged DataFrame from scratch. If "
+        "not specified, the merged DataFrame will be loaded from cache.",
     )
     parser.add_argument(
         "--plot-venn", action="store_true", help="Plot the venn diagrams"
@@ -779,6 +795,6 @@ if __name__ == "__main__":
         args.network_set_id,
         args.out_dir,
         merge_how=args.merge_how,
-        save_merged_df=args.save_merged_df,
+        regenerate_merged_df=args.regenerate_merged_df,
         plot_venn=args.plot_venn,
     )
