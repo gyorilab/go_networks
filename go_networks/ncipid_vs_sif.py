@@ -138,12 +138,10 @@ def _get_ndex_graph_info(network_id: str) -> Tuple[str, str]:
     return network_name, ftp_url
 
 
-def _download_owl_file(uuid: str, out_file: str):
-    # Get ftp url
-    name, url = _get_ndex_graph_info(uuid)
-
-    # Download the file to the given file path
-    with closing(request.urlopen(url)) as r:
+def _download_owl_file(ftp_url: str, out_file: str):
+    """Download the owl file for a network from NDEx. and return the name"""
+    # Download the file at the url for the ftp server to the given file path
+    with closing(request.urlopen(ftp_url)) as r:
         with open(out_file, 'wb') as f:
             shutil.copyfileobj(r, f)
 
