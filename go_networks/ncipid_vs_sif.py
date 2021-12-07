@@ -3,8 +3,10 @@ Compare  the NCIPID CX network on NDEx with the INDRA Sif dump in order to
 find the sets of interactions for each of them and compare intersection and
 differences.
 """
+import gzip
 import shutil
 from contextlib import closing
+from pathlib import Path
 from urllib import parse, request
 import argparse
 import logging
@@ -146,12 +148,24 @@ def _get_ndex_graph_info(network_id: str, client: Optional[Ndex2]) -> Tuple[str,
     return network_name, ftp_url
 
 
-def _download_owl_file(ftp_url: str, out_file: str):
+def _download_extract_owl_file(ftp_url: str, out_dir: str):
     """Download the owl file for a network from NDEx. and return the name"""
-    # Download the file at the url for the ftp server to the given file path
-    with closing(request.urlopen(ftp_url)) as r:
-        with open(out_file, "wb") as f:
-            shutil.copyfileobj(r, f)
+    owl_gz = ftp_url.split("/")[-1]
+    assert owl_gz.endswith("owl.gz"), f"Expected owl.gz file, got {owl_gz}"
+    gz_path = Path(out_dir).joinpath(owl_gz)
+    if not gz_path.exists():
+        # Download the file at the url for the ftp server to the given file path
+        with closing(request.urlopen(ftp_url)) as r:
+            with gz_path.open("wb") as f:
+                shutil.copyfileobj(r, f)
+
+    # Extract the owl file from the gz file
+    owl_path = Path(out_dir).joinpath(owl_gz.replace(".gz", ""))
+    if not owl_path.exists():
+        with gzip.open(gz_path, "rb") as f, owl_path.open("wb") as f2:
+            shutil.copyfileobj(f, f2)
+    else:
+        logger.info(f"{owl_path} already exists, skipping download")
 
 
 def _get_nci_statements(owl_file: str) -> List[Statement]:
