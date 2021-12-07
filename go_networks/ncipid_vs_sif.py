@@ -614,7 +614,7 @@ def identify_missing_edges_in_cx_graph(
     return list(sorted(nci_only_edges, key=lambda x: x[0]))
 
 
-def main(sif_file, ncipid_file, network_set_id, merge_how="outer",
+def main(sif_file, ncipid_file, network_set_id, out_dir, merge_how="outer",
          save_merged_df=False, plot_venn=False):
     """Compare NCI and INDRA Sif, get statements per NCI graph
 
@@ -624,6 +624,8 @@ def main(sif_file, ncipid_file, network_set_id, merge_how="outer",
         The INDRA SIF dump file location
     ncipid_file :
         The nci-pid CX dump file location
+    out_dir :
+        The output directory
     network_set_id :
         The NCI network set id
     merge_how :
@@ -696,6 +698,7 @@ if __name__ == "__main__":
         args.sif_file,
         args.ncipid_file,
         args.network_set_id,
+        args.out_dir,
         merge_how=args.merge_how,
         save_merged_df=args.save_merged_df,
         plot_venn=args.plot_venn,
