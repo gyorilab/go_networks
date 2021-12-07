@@ -148,7 +148,7 @@ def _get_ndex_graph_info(network_id: str, client: Optional[Ndex2]) -> Tuple[str,
     return network_name, ftp_url
 
 
-def _download_extract_owl_file(ftp_url: str, out_dir: str):
+def _download_extract_owl_file(ftp_url: str, out_dir: str) -> str:
     """Download the owl file for a network from NDEx. and return the name"""
     owl_gz = ftp_url.split("/")[-1]
     assert owl_gz.endswith("owl.gz"), f"Expected owl.gz file, got {owl_gz}"
@@ -166,6 +166,8 @@ def _download_extract_owl_file(ftp_url: str, out_dir: str):
             shutil.copyfileobj(f, f2)
     else:
         logger.info(f"{owl_path} already exists, skipping download")
+
+    return owl_path.absolute().as_posix()
 
 
 def _get_nci_statements(owl_file: str) -> List[Statement]:
