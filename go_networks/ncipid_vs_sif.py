@@ -151,7 +151,9 @@ def _get_ndex_graph_info(network_id: str, client: Optional[Ndex2]) -> Tuple[str,
     return network_name, ftp_url
 
 
-def _get_cx_graph_from_server(network_id: str, out_dir: str) -> NiceCXNetwork:
+def _get_cx_graph_from_server(
+    network_id: str, out_dir: Union[Path, str]
+) -> NiceCXNetwork:
     """Get a NiceCXNetwork from an NDEx network."""
     # Check if the network is already in the local cache
     cx_file = Path(out_dir).joinpath(f"{network_id}.cx")
@@ -718,18 +720,19 @@ def main(
     for graph_id in tqdm(nci_graph_ids):
         # Get the name and owl ftp url
         name, owl_url = _get_ndex_graph_info(graph_id, client)
-        graph_dir = os.path.join(out_dir, name)
-        if not os.path.exists(graph_dir):
-            os.makedirs(graph_dir)
+        graph_dir = Path(out_dir).joinpath(name)
+        graph_dir.exists() or graph_dir.mkdir()
 
         # Download and unzip the owl file
-        owl_file_path = _download_extract_owl_file(owl_url, graph_dir)
+        owl_file_path = _download_extract_owl_file(
+            owl_url, graph_dir.absolute().as_posix()
+        )
 
         # Get the statements from the owl file and pickle them
         statements = _get_nci_statements(owl_file_path)
         if statements:
-            pickle_path = os.path.join(graph_dir, "statements.pkl")
-            with open(pickle_path, "wb") as f:
+            pickle_path = graph_dir.joinpath("statements.pkl")
+            with pickle_path.open("wb") as f:
                 pickle.dump(statements, f)
 
         # Get the cx graph
@@ -739,11 +742,12 @@ def main(
         nci_only_edges = identify_missing_edges_in_cx_graph(cx, nci_only_pairs)
 
         # Write the nci only edges to a csv
-        nci_only_edges_path = os.path.join(graph_dir, "nci_only_edges.csv")
-        with open(nci_only_edges_path, "w") as f:
-            writer = csv.writer(f, delimiter=",")
-            writer.writerow(["source", "target"])
-            writer.writerows(nci_only_edges)
+        if nci_only_edges:
+            nci_only_edges_path = graph_dir.joinpath("nci_only_edges.csv")
+            with nci_only_edges_path.open("w") as f:
+                writer = csv.writer(f, delimiter=",")
+                writer.writerow(["source", "target"])
+                writer.writerows(nci_only_edges)
 
 
 if __name__ == "__main__":
