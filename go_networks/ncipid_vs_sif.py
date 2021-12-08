@@ -15,6 +15,7 @@ import logging
 import os
 import pickle
 from typing import Tuple, Optional, List, Dict, Union
+from urllib.error import URLError
 
 import numpy as np
 import pandas as pd
@@ -740,10 +741,13 @@ def main(
         graph_dir.exists() or graph_dir.mkdir()
 
         # Download and unzip the owl file
-        owl_file_path = _download_extract_owl_file(
-            owl_url, graph_dir.absolute().as_posix()
-        )
-
+        try:
+            owl_file_path = _download_extract_owl_file(
+                owl_url, graph_dir.absolute().as_posix()
+            )
+        except URLError as err:
+            logger.warning(f"Error downloading {owl_url} for {graph_id}: {err}")
+            continue
         # Get the statements from the owl file and pickle them
         statements = _get_nci_statements(owl_file_path)
         if statements:
