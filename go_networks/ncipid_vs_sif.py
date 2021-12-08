@@ -58,6 +58,9 @@ def _get_default_ndex_args() -> Dict[str, str]:
 
 NDEX_ARGS = _get_default_ndex_args()
 
+proteins = ['FPLX', 'UPPRO', 'HGNC', 'UP']
+small_molecules = ['CHEBI', 'CHEMBL', 'PUBCHEM']
+
 
 def _rank(list_of_names: List[str], name) -> int:
     return list_of_names.index(name) if name in list_of_names else len(list_of_names)
@@ -195,13 +198,37 @@ def _get_nci_statements(owl_file: str) -> List[Statement]:
     return bp.statements
 
 
-def _get_grounding(name):
+def _get_grounding(name, original_ns=None):
     """Get the grounding from the gilda"""
     gilda_res = get_grounding(name)
     if gilda_res and gilda_res[1]:  # gilda_res == ({...}, [...])
-        # Get first match
-        term_match = gilda_res[1][0]["term"]
-        return term_match["entry_name"], term_match["db"], term_match["id"]
+        # Get first match that also corresponds to the original namespace
+        if original_ns is None or original_ns not in small_molecules or \
+                original_ns not in proteins:
+            term_match = gilda_res[1][0]["term"]
+            return term_match["entry_name"], term_match["db"], term_match["id"]
+
+        if original_ns in small_molecules:
+            ns_set = small_molecules
+        elif original_ns in proteins:
+            ns_set = proteins
+        else:
+            raise ValueError(f"Unknown namespace {original_ns}")
+
+        # Get the top ranked match withing the namespace class: go by the
+        # index of the entity in ns_set. If tied, go by the gilda score
+        res = []
+        for term_match in gilda_res[1]:
+            term = term_match["term"]
+            term_name = term["entry_name"]
+            term_ns = term["db"]
+            term_id = term["ib"]
+            rank = ns_set.index(term_ns) or len(ns_set)
+            score = term_match["score"]
+            res.append((rank, score, term_name, term_ns, term_id))
+
+        # Sort by rank, then by score
+        return sorted(res, key=lambda x: (x[0], x[1]))[0][2:]
 
 
 def _get_node_info(
@@ -248,7 +275,7 @@ def _get_node_info(
         # Get the HGNC id from the SIF name map
         hgnc_id = _nim(name) if sif_name_map else None
 
-        # If we have a mapping, return it
+        # If we have protein mapping, return it
         if hgnc_id is not None and hgnc_id[0] == "HGNC":
             hns, hid = hgnc_id
             return name, hns, hid
@@ -302,14 +329,14 @@ def _get_node_info(
 
     # Last resort: try to get a name from gilda
     if use_gilda:
-        grounding = _get_grounding(name)
+        grounding = _get_grounding(name, ns)
         if grounding:
             return grounding
         # Try to get a grounding without 'family' in the name. This works for
         # e.g. "Gi" vs "Gi family"
         if "family" in name.lower():
             name = name.replace("family", "").strip()
-            grounding = _get_grounding(name)
+            grounding = _get_grounding(name, ns)
             # Only return if gilda found a family in FPLX
             if grounding and grounding[1] == "FPLX":
                 return grounding
