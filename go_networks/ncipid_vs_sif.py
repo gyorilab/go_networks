@@ -711,6 +711,9 @@ def main(
         Whether to plot Venn diagrams of the interactions in the merged
         DataFrame.
     """
+    # Create the output directory if it doesn't exist
+    Path(out_dir).exists() or Path(out_dir).mkdir(parents=True)
+
     # Get the pairs that are only in the NCI graphs
     nci_only_pairs = get_nci_only_edges(
         get_merged_df(
