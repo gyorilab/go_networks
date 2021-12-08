@@ -497,7 +497,6 @@ def get_merged_df(
     sif_file: str,
     ncipid_file: str,
     out_dir: str,
-    merge_how: str = "outer",
     regenerate: bool = False,
     plot_venn: bool = False,
 ) -> pd.DataFrame:
@@ -514,12 +513,6 @@ def get_merged_df(
         if plot_venn:
             venn_plots(merged_df, out_dir)
         return merged_df
-
-    if merge_how not in ["left", "right", "outer", "inner", "cross"]:
-        raise ValueError(
-            f"Invalid merge_how value {merge_how}. Allowed "
-            f"values are 'left', 'right', 'outer', 'inner', 'cross'"
-        )
 
     # Load the INDRA SIF dump
     logger.info(f"Loading the INDRA SIF from {sif_file}")
@@ -545,7 +538,7 @@ def get_merged_df(
     cx_sif = build_cx_sif(nci_cx, node_id_to_entity)
 
     # Merge the two data frames
-    merged_df = merge_dfs(sif_df, cx_sif, merge_how=merge_how)
+    merged_df = merge_dfs(sif_df, cx_sif, merge_how='outer')
     merged_df.to_pickle(merged_file.absolute().as_posix())
 
     # Do venn diagram plotting if requested
@@ -697,7 +690,6 @@ def main(
     ncipid_file,
     network_set_id,
     out_dir,
-    merge_how="outer",
     regenerate_merged_df=False,
     plot_venn=False,
 ):
@@ -713,11 +705,6 @@ def main(
         The output directory
     network_set_id :
         The NCI network set id
-    merge_how :
-        How to merge the INDRA SIF with the nci-pid CX SIF. Allowed values are
-        "outer", "left", "right", and "inner". This is passed to the "how"
-        parameter for pandas.DataFrame.merge(). The sif dump is "left" and
-        the nci-pid CX SIF is "right": sif_df.merge(cx_df, how=merge_how).
     regenerate_merged_df :
         Whether to save the merged DataFrame to a pickle file.
     plot_venn :
@@ -730,7 +717,6 @@ def main(
             sif_file,
             ncipid_file,
             out_dir,
-            merge_how=merge_how,
             regenerate=regenerate_merged_df,
             plot_venn=plot_venn,
         )
@@ -795,14 +781,6 @@ if __name__ == "__main__":
         help="The network set id to grab cx and owl files from",
     )
     parser.add_argument(
-        "--merge-how",
-        help="How to merge the INDRA SIF with the nci-pid CX SIF. This is "
-        "passed to the 'how' parameter for pandas.DataFrame.merge(). The "
-        "sif dump is 'left' and the nci-pid CX SIF is 'right': "
-        "sif_df.merge(cx_df, how=merge_how)",
-        default="outer",
-    )
-    parser.add_argument(
         "--regenerate-merged-df",
         action="store_true",
         help="Whether to regenerate the merged DataFrame from scratch. If "
@@ -825,7 +803,6 @@ if __name__ == "__main__":
         args.ncipid_file,
         args.network_set_id,
         args.out_dir,
-        merge_how=args.merge_how,
         regenerate_merged_df=args.regenerate_merged_df,
         plot_venn=args.plot_venn,
     )
