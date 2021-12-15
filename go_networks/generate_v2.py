@@ -24,6 +24,7 @@ from go_networks.util import (
 from go_networks.network_assembly import GoNetworkAssembler
 from indra_db.client.principal.curation import get_curations
 from indra.databases import uniprot_client, hgnc_client
+from indra.util.statement_presentation import reader_sources
 
 # Derived types
 Go2Genes = Dict[str, Set[str]]
@@ -74,8 +75,51 @@ def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
     return sif.query("agA_ns == 'HGNC' & agB_ns == 'HGNC'")
 
 
+def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
+    """Apply quality filters to the SIF dataframe
+
+
+    Filters applied:
+        - Remove all rows that are curated as incorrect
+        - Remove all rows with only one source that is also a reader
+        - Remove all rows where there is only one source, the source is
+          sparser and the stmt type is Complex
+
+    Parameters
+    ----------
+    sif_df : pd.DataFrame
+        The SIF dataframe
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered SIF dataframe
+    """
+    # Filter out curated incorrect statements
+    wrong_hashes = get_curation_set()
+    sif_df = sif_df[~sif_df.stmt_hash.isin(wrong_hashes)]
+
+    # Filter out statements with only one source that is also a reader
+    sif_df = sif_df[
+        (sif_df.evidence_count > 1) &
+        (sif_df.source_counts.apply(
+            lambda d: not (d is None or (len(d) == 1 and set(d.values()) &
+                           reader_sources))
+        ))
+    ]
+
+    # Remove all rows where there is only one source, the source is sparser
+    # and the stmt type is Complex
+    sif_df = sif_df[
+        ~((sif_df.stmt_type == "Complex") &
+          (set(sif_df.source_counts) == {"sparser"}))
+    ]
+
+    return sif_df
+
+
 def generate_props(
-    sif_file: str, props_file: Optional[str] = None
+    sif_file: str, props_file: Optional[str] = None, apply_filters: bool = True
 ) -> Dict[str, List[Dict[str, int]]]:
     """Generate properties per pair from the Sif dump
 
@@ -102,6 +146,10 @@ def generate_props(
 
         # Filter out self-loops
         sif_df = filter_self_loops(sif_df)
+
+        # Run filters if enabled
+        if apply_filters:
+            sif_df = quality_filter(sif_df)
 
         hashes_by_pair = defaultdict(set)
         props_by_hash = {}
