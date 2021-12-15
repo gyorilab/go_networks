@@ -78,7 +78,6 @@ def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
 def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
     """Apply quality filters to the SIF dataframe
 
-
     Filters applied:
         - Remove all rows that are curated as incorrect
         - Remove all rows with only one source that is also a reader
@@ -96,24 +95,31 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
         The filtered SIF dataframe
     """
     # Filter out curated incorrect statements
+    t = tqdm(desc="Quality filtering", total=3)
     wrong_hashes = get_curation_set()
     sif_df = sif_df[~sif_df.stmt_hash.isin(wrong_hashes)]
+    t.update()
 
-    # Filter out statements with only one source that is also a reader
+    # Filter out statements with only one source and a reader source
+    reader_sources_set = set(reader_sources)
     sif_df = sif_df[
-        (sif_df.evidence_count > 1) &
-        (sif_df.source_counts.apply(
-            lambda d: not (d is None or (len(d) == 1 and set(d.values()) &
-                           reader_sources))
-        ))
+        ~((sif_df.evidence_count == 1) &
+          (sif_df.source_counts.apply(
+            lambda d: d is None or
+            (len(d) == 1 and bool((set(d) & reader_sources_set))))
+          ))
     ]
+    t.update()
 
     # Remove all rows where there is only one source, the source is sparser
     # and the stmt type is Complex
-    sif_df = sif_df[
-        ~((sif_df.stmt_type == "Complex") &
-          (set(sif_df.source_counts) == {"sparser"}))
-    ]
+    sif_df = sif_df[~(
+            (sif_df.stmt_type == "Complex") &
+            (sif_df.source_counts.apply(lambda d: d is None or
+                                        (set(d) == {"sparser"})))
+    )]
+    t.update()
+    t.close()
 
     return sif_df
 
@@ -149,6 +155,7 @@ def generate_props(
 
         # Run filters if enabled
         if apply_filters:
+            logger.info("Applying quality filters")
             sif_df = quality_filter(sif_df)
 
         hashes_by_pair = defaultdict(set)
