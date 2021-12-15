@@ -22,6 +22,7 @@ from go_networks.util import (
     load_latest_sif,
 )
 from go_networks.network_assembly import GoNetworkAssembler
+from indra_db.client.principal.curation import get_curations
 from indra.databases import uniprot_client, hgnc_client
 
 # Derived types
@@ -40,6 +41,21 @@ min_gene_count = 5
 max_gene_count = 200
 
 logger = logging.getLogger(__name__)
+
+
+def get_curation_set() -> Set[int]:
+    correct_tags = {"correct", "hypothesis", "activity_amount"}
+    try:
+        curations = get_curations()
+        # curations == {'pa_hash': 123456, 'tag': '<grounding tag>'}
+        # Only keep the hashes for the curations that are not correct
+        wrong_hashes = {
+            c['pa_hash'] for c in curations if c['tag'] not in correct_tags
+        }
+        logger.info(f"Found {len(wrong_hashes)} hashes to filter out")
+        return wrong_hashes
+    except Exception as e:
+        logger.error(f"Could not get curations: {e}")
 
 
 def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
