@@ -320,7 +320,9 @@ def filter_go_ids(go2genes_map):
             if min_gene_count <= len(genes) <= max_gene_count}
 
 
-def generate(sif_file: Optional[str] = None, props_file: Optional[str] = None):
+def generate(sif_file: Optional[str] = None,
+             props_file: Optional[str] = None,
+             apply_filters: bool = True):
     """Generate new GO networks from INDRA statements
 
     Parameters
@@ -338,7 +340,7 @@ def generate(sif_file: Optional[str] = None, props_file: Optional[str] = None):
     go2genes_map = filter_go_ids(go2genes_map)
 
     # Generate properties
-    sif_props = generate_props(sif_file, props_file)
+    sif_props = generate_props(sif_file, props_file, apply_filters=apply_filters)
 
     # Iterate by GO ID and for each list of genes, build a network
     return build_networks(go2genes_map, sif_props)
@@ -388,7 +390,7 @@ if __name__ == "__main__":
         with open(NETWORKS_FILE, 'rb') as fh:
             networks = pickle.load(fh)
     else:
-        networks = generate(args.local_sif, PROPS_FILE)
+        networks = generate(args.local_sif, PROPS_FILE, apply_filters=True)
         with open(NETWORKS_FILE, 'wb') as f:
             pickle.dump(networks, f)
 
