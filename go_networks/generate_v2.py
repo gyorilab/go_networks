@@ -111,8 +111,7 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
     ]
     t.update()
 
-    # Remove all rows where there is only one source, the source is sparser
-    # and the stmt type is Complex
+    # Remove all rows where the source is sparser and the stmt type is Complex
     sif_df = sif_df[~(
             (sif_df.stmt_type == "Complex") &
             (sif_df.source_counts.apply(lambda d: d is None or
@@ -144,6 +143,8 @@ def generate_props(
         with Path(props_file).open(mode="rb") as fr:
             props_by_pair = pickle.load(fr)
     else:
+        logger.info("Generating property lookup")
+
         # Load the latest INDRA SIF dump
         sif_df = get_sif(sif_file)
 
