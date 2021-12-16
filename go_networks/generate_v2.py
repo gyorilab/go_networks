@@ -391,7 +391,12 @@ if __name__ == "__main__":
         with open(NETWORKS_FILE, 'rb') as fh:
             networks = pickle.load(fh)
     else:
-        networks = generate(args.local_sif, PROPS_FILE, apply_filters=True)
+        if args.regenerate:
+            logger.info("Regenerating props and networks")
+            props_file = None
+        else:
+            props_file = PROPS_FILE
+        networks = generate(args.local_sif, props_file, apply_filters=True)
         with open(NETWORKS_FILE, 'wb') as f:
             pickle.dump(networks, f)
 
