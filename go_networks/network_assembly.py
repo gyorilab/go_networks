@@ -229,6 +229,25 @@ class GoNetworkAssembler:
                     'list_of_string'
                 )
 
+            # Add a linkout to all statements involving the pair
+            if forward and reverse:
+                agent_query = f'agent0={source}&agent1={target}'
+            elif forward and not reverse:
+                agent_query = f'subject={source}&object={target}'
+            elif not forward and reverse:
+                agent_query = f'subject={target}&object={source}'
+            else:  # not forward and not reverse:
+                # this implies there are only undirected statements and
+                # subject/object would also include directed statements
+                agent_query = f'agent0={source}&agent1={target}'
+            self.network.add_edge_attribute(
+                edge_id,
+                f'All statements involving {source} and {target}',
+                f'https://db.indra.bio/statements/from_agents?'
+                f'{agent_query}&format=html',
+                'list_of_string'
+            )
+
         # Get layout by name now that the network is built
         node_layout_by_name = _get_cx_layout(self.network)
 
