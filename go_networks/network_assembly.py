@@ -7,6 +7,8 @@ from networkx.drawing import layout
 
 from ndex2 import NiceCXNetwork
 
+from indra.assemblers.english import EnglishAssembler
+from indra.statements import get_statement_by_name, Agent
 from indra.ontology.bio import bio_ontology
 from indra.databases import identifiers
 from indra.ontology.standardize import standardize_db_refs
@@ -35,16 +37,30 @@ def get_aliases(gene_name):
     return curies
 
 
+def _get_english_from_stmt_type(stmt_type: str, source: str, target: str) -> str:
+    # Get Statement class from type
+    stmt_cls = get_statement_by_name(stmt_type)
+    # Get mock statement
+    if stmt_cls.__name__ == 'Complex':
+        stmt = stmt_cls([Agent(source), Agent(target)])
+    else:
+        stmt = stmt_cls(Agent(source), Agent(target))
+    # Get English
+    return EnglishAssembler([stmt]).make_model()
+
+
 def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
     parts = []
     for stmt_type, cnt in sorted(ev_counts.items(), key=lambda x: x[1], reverse=True):
+        english = _get_english_from_stmt_type(stmt_type, source, target)
         if directed:
             url = f'https://db.indra.bio/statements/from_agents?' \
                 f'subject={source}&object={target}&type={stmt_type}&format=html'
         else:
             url = f'https://db.indra.bio/statements/from_agents?' \
                 f'agent0={source}&agent1={target}&type={stmt_type}&format=html'
-        part = f'{stmt_type}(<a href="{url}" target="_blank">View {cnt} statements</a>)'
+        part = f'{english}(<a href="{url}" target="_blank">View {cnt} ' \
+               f'evidence{"s" if cnt > 1 else ""}</a>)'
         parts.append(part)
     return parts
 
