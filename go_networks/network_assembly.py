@@ -192,20 +192,26 @@ class GoNetworkAssembler:
                                             True if reverse else False,
                                             'boolean')
             if forward:
-                self.network.add_edge_attribute(edge_id, 'SOURCE => TARGET',
-                    edge_attribute_from_ev_counts(source, target, forward,
-                                                 True),
-                    'list_of_string')
+                self.network.add_edge_attribute(
+                    edge_id,
+                    f'{source} => {target}',
+                    edge_attribute_from_ev_counts(source, target, forward, True),
+                    'list_of_string'
+                )
             if reverse:
-                self.network.add_edge_attribute(edge_id, 'TARGET => SOURCE',
-                    edge_attribute_from_ev_counts(target, source, reverse,
-                                                  True),
-                    'list_of_string')
+                self.network.add_edge_attribute(
+                    edge_id,
+                    f'{target} => {source}',
+                    edge_attribute_from_ev_counts(target, source, reverse, True),
+                    'list_of_string'
+                )
             if undirected:
-                self.network.add_edge_attribute(edge_id, 'SOURCE - TARGET',
-                    edge_attribute_from_ev_counts(source, target, undirected,
-                                                  False),
-                    'list_of_string')
+                self.network.add_edge_attribute(
+                    edge_id,
+                    f'{source} - {target}',
+                    edge_attribute_from_ev_counts(source, target, undirected, False),
+                    'list_of_string'
+                )
 
         # Get layout by name now that the network is built
         node_layout_by_name = _get_cx_layout(self.network)
