@@ -98,6 +98,17 @@ def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500,
     return cx_pos
 
 
+def _get_symb(forward: bool, reverse: bool) -> str:
+    if forward and reverse:
+        return '<=>'
+    elif forward and not reverse:
+        return '=>'
+    elif not forward and reverse:
+        return '<='
+    else:
+        return '-'
+
+
 class GoNetworkAssembler:
     namespace = "GO"
 
