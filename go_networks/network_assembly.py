@@ -181,9 +181,10 @@ class GoNetworkAssembler:
                                             type='string')
         for (source, target), (forward, reverse, undirected) \
                 in self.pair_properties.items():
+            interaction_symbol = _get_symb(bool(forward), bool(reverse))
             edge_id = self.network.create_edge(node_keys[source],
                                                node_keys[target],
-                                               'interacts with')
+                                               interaction_symbol)
             self.network.add_edge_attribute(edge_id, 'directed',
                                             True if forward else False,
                                             'boolean')
