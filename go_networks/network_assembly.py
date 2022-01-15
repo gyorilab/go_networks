@@ -240,11 +240,15 @@ class GoNetworkAssembler:
                 # this implies there are only undirected statements and
                 # subject/object would also include directed statements
                 agent_query = f'agent0={source}&agent1={target}'
+            url = (
+                'https://db.indra.bio/statements/from_agents?'
+                f'{agent_query}&format=html'
+            )
             self.network.add_edge_attribute(
                 edge_id,
-                f'All statements involving {source} and {target}',
-                f'https://db.indra.bio/statements/from_agents?'
-                f'{agent_query}&format=html',
+                f'All statements with {source} and {target}',
+                f'<a href="{url}" target="_blank">View all statements</a> '
+                f'involving {source} and {target} from the INDRA DB',
                 'string'
             )
 
