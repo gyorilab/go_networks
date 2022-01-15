@@ -245,7 +245,7 @@ class GoNetworkAssembler:
                 f'All statements involving {source} and {target}',
                 f'https://db.indra.bio/statements/from_agents?'
                 f'{agent_query}&format=html',
-                'list_of_string'
+                'string'
             )
 
         # Get layout by name now that the network is built
