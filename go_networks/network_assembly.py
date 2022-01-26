@@ -59,11 +59,11 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
         if directed:
             url = f'https://db.indra.bio/statements/from_agents?' \
                 f'subject={source}&object={target}&type=' \
-                  f'{stmt_type}&format=html&expand_all=true'
+                  f'{stmt_type}&format=html'
         else:
             url = f'https://db.indra.bio/statements/from_agents?' \
                 f'agent0={source}&agent1={target}&type=' \
-                  f'{stmt_type}&format=html&expand_all=true'
+                  f'{stmt_type}&format=html'
         part = f'{english} (<a href="{url}" target="_blank">View {cnt} ' \
                f'evidence{"s" if cnt > 1 else ""}</a>)'
         parts.append(part)
@@ -247,7 +247,7 @@ class GoNetworkAssembler:
                 agent_query = f'agent0={source}&agent1={target}'
             url = (
                 'https://db.indra.bio/statements/from_agents?'
-                f'{agent_query}&format=html&expand_all=true'
+                f'{agent_query}&format=html'
             )
             self.network.add_edge_attribute(
                 edge_id,
