@@ -95,8 +95,8 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
         The filtered SIF dataframe
     """
     # Filter out curated incorrect statements
-    t = tqdm(desc="Quality filtering", total=3)
     wrong_hashes = get_curation_set()
+    t = tqdm(desc="Quality filtering", total=3)
     sif_df = sif_df[~sif_df.stmt_hash.isin(wrong_hashes)]
     t.update()
 
