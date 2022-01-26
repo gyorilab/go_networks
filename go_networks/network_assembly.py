@@ -246,9 +246,9 @@ class GoNetworkAssembler:
             )
             self.network.add_edge_attribute(
                 edge_id,
-                f'All statements with {source} and {target}',
+                f'All statements involving {source} and {target}',
                 f'<a href="{url}" target="_blank">View all statements</a> '
-                f'involving {source} and {target} from the INDRA DB',
+                f'involving {source} and {target}',
                 'string'
             )
 
