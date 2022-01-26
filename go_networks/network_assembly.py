@@ -242,7 +242,7 @@ class GoNetworkAssembler:
                 agent_query = f'agent0={source}&agent1={target}'
             url = (
                 'https://db.indra.bio/statements/from_agents?'
-                f'{agent_query}&format=html'
+                f'{agent_query}&format=html&expand_all=true'
             )
             self.network.add_edge_attribute(
                 edge_id,
