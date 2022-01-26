@@ -277,6 +277,7 @@ def build_networks(go2genes_map: Go2Genes,
         Dict of assembled networks by go id
     """
     networks = {}
+    skipped = 0
     # Only pass the relevant parts of the pair_props dict
     for go_id, gene_set in tqdm(go2genes_map.items(), total=len(go2genes_map)):
         def _key(g1, g2):
@@ -287,7 +288,8 @@ def build_networks(go2genes_map: Go2Genes,
                      if _key(g1, g2) in pair_props}
 
         if not prop_dict:
-            logger.info(f"No statements for ID {go_id}")
+            # logger.info(f"No statements for ID {go_id}")
+            skipped += 1
             continue
 
         gna = GoNetworkAssembler(
@@ -297,6 +299,8 @@ def build_networks(go2genes_map: Go2Genes,
         )
         gna.assemble()
         networks[go_id] = gna.network
+
+    logger.info(f"Skipped {skipped} networks without statements")
     return networks
 
 
