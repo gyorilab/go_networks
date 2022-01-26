@@ -53,13 +53,18 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
     parts = []
     for stmt_type, cnt in sorted(ev_counts.items(), key=lambda x: x[1], reverse=True):
         english = _get_english_from_stmt_type(stmt_type, source, target)
+
+        # Strip out trailing period
+        english = english[:-1] if english[-1] == '.' else english
         if directed:
             url = f'https://db.indra.bio/statements/from_agents?' \
-                f'subject={source}&object={target}&type={stmt_type}&format=html'
+                f'subject={source}&object={target}&type=' \
+                  f'{stmt_type}&format=html&expand_all=true'
         else:
             url = f'https://db.indra.bio/statements/from_agents?' \
-                f'agent0={source}&agent1={target}&type={stmt_type}&format=html'
-        part = f'{english}(<a href="{url}" target="_blank">View {cnt} ' \
+                f'agent0={source}&agent1={target}&type=' \
+                  f'{stmt_type}&format=html&expand_all=true'
+        part = f'{english} (<a href="{url}" target="_blank">View {cnt} ' \
                f'evidence{"s" if cnt > 1 else ""}</a>)'
         parts.append(part)
     return parts
