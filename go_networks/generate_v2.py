@@ -96,9 +96,12 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
     """
     # Filter out curated incorrect statements
     wrong_hashes = get_curation_set()
-    t = tqdm(desc="Quality filtering", total=3)
-    sif_df = sif_df[~sif_df.stmt_hash.isin(wrong_hashes)]
-    t.update()
+    if wrong_hashes:
+        t = tqdm(desc="Quality filtering", total=3)
+        sif_df = sif_df[~sif_df.stmt_hash.isin(wrong_hashes)]
+        t.update()
+    else:
+        t = tqdm(desc="Quality filtering", total=2)
 
     # Filter out statements with only one source and a reader source
     reader_sources_set = set(reader_sources)
