@@ -206,10 +206,10 @@ class GoNetworkAssembler:
             edge_id = self.network.create_edge(node_keys[source],
                                                node_keys[target],
                                                interaction_symbol)
-            self.network.add_edge_attribute(edge_id, 'directed',
+            self.network.add_edge_attribute(edge_id, '__directed',
                                             True if forward else False,
                                             'boolean')
-            self.network.add_edge_attribute(edge_id, 'reverse directed',
+            self.network.add_edge_attribute(edge_id, '__reverse directed',
                                             True if reverse else False,
                                             'boolean')
             if forward:
