@@ -1,6 +1,7 @@
 """
-Generate GO Networks
+Generate GO Networks from a list of GO terms and the Sif dump.
 """
+import argparse
 from collections import defaultdict
 import logging
 import pickle
@@ -21,7 +22,9 @@ from go_networks.util import (
     load_latest_sif,
 )
 from go_networks.network_assembly import GoNetworkAssembler
+from indra_db.client.principal.curation import get_curations
 from indra.databases import uniprot_client, hgnc_client
+from indra.util.statement_presentation import reader_sources
 
 # Derived types
 Go2Genes = Dict[str, Set[str]]
@@ -32,7 +35,6 @@ NameEntityMap = Dict[str, Tuple[str, str]]
 HERE = Path(__file__).absolute().parent.parent
 GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
-LOCAL_SIF = '/Users/ben/.data/indra/db/sif.pkl'
 PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
 NETWORKS_FILE = HERE.joinpath("networks.pkl").absolute().as_posix()
 
@@ -40,6 +42,21 @@ min_gene_count = 5
 max_gene_count = 200
 
 logger = logging.getLogger(__name__)
+
+
+def get_curation_set() -> Set[int]:
+    correct_tags = {"correct", "hypothesis", "activity_amount"}
+    try:
+        curations = get_curations()
+        # curations == {'pa_hash': 123456, 'tag': '<grounding tag>'}
+        # Only keep the hashes for the curations that are not correct
+        wrong_hashes = {
+            c['pa_hash'] for c in curations if c['tag'] not in correct_tags
+        }
+        logger.info(f"Found {len(wrong_hashes)} hashes to filter out")
+        return wrong_hashes
+    except Exception as e:
+        logger.error(f"Could not get curations: {e}")
 
 
 def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
@@ -58,8 +75,59 @@ def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
     return sif.query("agA_ns == 'HGNC' & agB_ns == 'HGNC'")
 
 
+def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
+    """Apply quality filters to the SIF dataframe
+
+    Filters applied:
+        - Remove all rows that are curated as incorrect
+        - Remove all rows with only one evidence that is from a reader
+        - Remove all rows where there is only one source, the source is
+          sparser and the stmt type is Complex
+
+    Parameters
+    ----------
+    sif_df : pd.DataFrame
+        The SIF dataframe
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered SIF dataframe
+    """
+    # Filter out curated incorrect statements
+    wrong_hashes = get_curation_set()
+    if wrong_hashes:
+        t = tqdm(desc="Quality filtering", total=3)
+        sif_df = sif_df[~sif_df.stmt_hash.isin(wrong_hashes)]
+        t.update()
+    else:
+        t = tqdm(desc="Quality filtering", total=2)
+
+    # Filter out statements with only one evidence from a reader source
+    reader_sources_set = set(reader_sources)
+    sif_df = sif_df[
+        ~((sif_df.evidence_count == 1) &
+          (sif_df.source_counts.apply(
+            lambda d: d is None or
+            (len(d) == 1 and bool((set(d) & reader_sources_set))))
+          ))
+    ]
+    t.update()
+
+    # Remove all rows where the source is sparser and the stmt type is Complex
+    sif_df = sif_df[~(
+            (sif_df.stmt_type == "Complex") &
+            (sif_df.source_counts.apply(lambda d: d is None or
+                                        (set(d) == {"sparser"})))
+    )]
+    t.update()
+    t.close()
+
+    return sif_df
+
+
 def generate_props(
-    sif_file: str, props_file: Optional[str] = None
+    sif_file: str, props_file: Optional[str] = None, apply_filters: bool = True
 ) -> Dict[str, List[Dict[str, int]]]:
     """Generate properties per pair from the Sif dump
 
@@ -78,6 +146,8 @@ def generate_props(
         with Path(props_file).open(mode="rb") as fr:
             props_by_pair = pickle.load(fr)
     else:
+        logger.info("Generating property lookup")
+
         # Load the latest INDRA SIF dump
         sif_df = get_sif(sif_file)
 
@@ -86,6 +156,11 @@ def generate_props(
 
         # Filter out self-loops
         sif_df = filter_self_loops(sif_df)
+
+        # Run filters if enabled
+        if apply_filters:
+            logger.info("Applying quality filters")
+            sif_df = quality_filter(sif_df)
 
         hashes_by_pair = defaultdict(set)
         props_by_hash = {}
@@ -205,6 +280,7 @@ def build_networks(go2genes_map: Go2Genes,
         Dict of assembled networks by go id
     """
     networks = {}
+    skipped = 0
     # Only pass the relevant parts of the pair_props dict
     for go_id, gene_set in tqdm(go2genes_map.items(), total=len(go2genes_map)):
         def _key(g1, g2):
@@ -215,7 +291,8 @@ def build_networks(go2genes_map: Go2Genes,
                      if _key(g1, g2) in pair_props}
 
         if not prop_dict:
-            logger.info(f"No statements for ID {go_id}")
+            # logger.info(f"No statements for ID {go_id}")
+            skipped += 1
             continue
 
         gna = GoNetworkAssembler(
@@ -225,6 +302,8 @@ def build_networks(go2genes_map: Go2Genes,
         )
         gna.assemble()
         networks[go_id] = gna.network
+
+    logger.info(f"Skipped {skipped} networks without statements")
     return networks
 
 
@@ -249,12 +328,14 @@ def filter_go_ids(go2genes_map):
             if min_gene_count <= len(genes) <= max_gene_count}
 
 
-def generate(sif_file: Optional[str] = None, props_file: Optional[str] = None):
+def generate(sif_file: Optional[str] = None,
+             props_file: Optional[str] = None,
+             apply_filters: bool = True):
     """Generate new GO networks from INDRA statements
 
     Parameters
     ----------
-    local_sif :
+    sif_file :
         If provided, load sif dump from this file. Default: load from S3.
     props_file :
         If provided, load property lookup from this file. Default: generate
@@ -267,7 +348,7 @@ def generate(sif_file: Optional[str] = None, props_file: Optional[str] = None):
     go2genes_map = filter_go_ids(go2genes_map)
 
     # Generate properties
-    sif_props = generate_props(sif_file, props_file)
+    sif_props = generate_props(sif_file, props_file, apply_filters=apply_filters)
 
     # Iterate by GO ID and for each list of genes, build a network
     return build_networks(go2genes_map, sif_props)
@@ -281,31 +362,60 @@ def format_and_upload_network(ncx, network_set_id, style_ncx,
     network_id = network_url.split('/')[-1]
     nd = ndex2.client.Ndex2(**{(k if k != 'server' else 'host'): v
                                for k, v in ndex_args.items()})
-    nd.make_network_public(network_id)
-    nd.add_networks_to_networkset(network_set_id, [network_id])
+    try:
+        nd.make_network_public(network_id)
+    except Exception as e:
+        logger.warning(f"Failed to make network {network_id} public: {e}")
+
+    try:
+        nd.add_networks_to_networkset(network_set_id, [network_id])
+    except Exception as e:
+        logger.warning(f"Failed to add network {network_id} to network set "
+                       f"{network_set_id}: {e}")
+
     return network_id
 
 
 if __name__ == "__main__":
-    # Todo: allow local file to be passed
-    if Path(NETWORKS_FILE).exists():
+    # Setup argument parser
+    parser = argparse.ArgumentParser(__doc__)
+    parser.add_argument('--local-sif',
+                        help='Local SIF dump file to load. If not provided, '
+                             'the latest SIF dump will be fetched from S3.')
+    parser.add_argument('--network-set',
+                        help='Network set ID to add the new networks to.',
+                        default='bdba6a7a-488a-11ec-b3be-0ac135e8bacf')
+    parser.add_argument('--style-network',
+                        help='Network ID of the style network',
+                        default='8e503fda-7110-11e9-b14c-0660b7976219')
+    parser.add_argument('--regenerate', action='store_true',
+                        help='Regenerate the networks and re-cache them')
+    args = parser.parse_args()
+    logger.info(f"Using network set id {args.network_set}")
+    logger.info(f"Using network style {args.style_network}")
+
+    if Path(NETWORKS_FILE).exists() and not args.regenerate:
         with open(NETWORKS_FILE, 'rb') as fh:
             networks = pickle.load(fh)
     else:
+        if args.regenerate:
+            logger.info("Regenerating props and networks")
+            props_file = None
+        else:
+            props_file = PROPS_FILE
+        networks = generate(args.local_sif, props_file, apply_filters=True)
         with open(NETWORKS_FILE, 'wb') as f:
-            networks = generate(LOCAL_SIF, PROPS_FILE)
             pickle.dump(networks, f)
 
-    network_set_id = 'd4b51854-0b2b-11ec-b666-0ac135e8bacf'
-    style_network_id = '8e503fda-7110-11e9-b14c-0660b7976219'
     style_ncx = create_nice_cx_from_server(
         server='http://test.ndexbio.org',
-        uuid=style_network_id)
+        uuid=args.style_network)
+
     from indra.databases import ndex_client
     username, password = ndex_client.get_default_ndex_cred(ndex_cred=None)
     ndex_args = {'server': 'http://public.ndexbio.org',
                  'username': username,
                  'password': password}
     for go_id, network in tqdm(sorted(networks.items(), key=lambda x: x[0])):
-        network_id = format_and_upload_network(network, network_set_id,
+        network_id = format_and_upload_network(network, args.network_set,
                                                style_ncx, **ndex_args)

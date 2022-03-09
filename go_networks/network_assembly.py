@@ -7,6 +7,8 @@ from networkx.drawing import layout
 
 from ndex2 import NiceCXNetwork
 
+from indra.assemblers.english import EnglishAssembler
+from indra.statements import get_statement_by_name, Agent
 from indra.ontology.bio import bio_ontology
 from indra.databases import identifiers
 from indra.ontology.standardize import standardize_db_refs
@@ -35,21 +37,40 @@ def get_aliases(gene_name):
     return curies
 
 
+def _get_english_from_stmt_type(stmt_type: str, source: str, target: str) -> str:
+    # Get Statement class from type
+    stmt_cls = get_statement_by_name(stmt_type)
+    # Get mock statement
+    if stmt_cls.__name__ == 'Complex':
+        stmt = stmt_cls([Agent(source), Agent(target)])
+    else:
+        stmt = stmt_cls(Agent(source), Agent(target))
+    # Get English
+    return EnglishAssembler([stmt]).make_model()
+
+
 def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
     parts = []
-    for stmt_type, cnt in sorted(ev_counts.items(), lambda x: x[1], reverse=True):
+    for stmt_type, cnt in sorted(ev_counts.items(), key=lambda x: x[1], reverse=True):
+        english = _get_english_from_stmt_type(stmt_type, source, target)
+
+        # Strip out trailing period
+        english = english[:-1] if english[-1] == '.' else english
         if directed:
             url = f'https://db.indra.bio/statements/from_agents?' \
-                f'subject={source}&object={target}&type={stmt_type}&format=html'
+                f'subject={source}&object={target}&type=' \
+                  f'{stmt_type}&format=html&expand_all=true'
         else:
             url = f'https://db.indra.bio/statements/from_agents?' \
-                f'agent0={source}&agent1={target}&type={stmt_type}&format=html'
-        part = f'{stmt_type}(<a href="{url}" target="_blank">View {cnt} statements</a>)'
+                f'agent0={source}&agent1={target}&type=' \
+                  f'{stmt_type}&format=html&expand_all=true'
+        part = f'{english} (<a href="{url}" target="_blank">View {cnt} ' \
+               f'evidence{"s" if cnt > 1 else ""}</a>)'
         parts.append(part)
     return parts
 
 
-def _detangle_layout(g: nx.Graph,
+def _untangle_layout(g: nx.Graph,
                      pos: Dict[str, List[float]]):
     # Find the nodes that are disconnected from the rest of the graph
     disconnected_nodes = []
@@ -70,25 +91,43 @@ def _detangle_layout(g: nx.Graph,
     x_min = min(pos.values(), key=lambda x: x[0])[0]
     x_dist = x_max - x_min
 
+    # Sort the nodes lexicographically by name: 0-9, A-Z, a-z
+    disconnected_nodes = sorted(sorted(disconnected_nodes), key=str.upper)
+
     # Move the disconnected nodes to below the graph at 10 % of the
     # y-distance, then set the x position linearly from the min to max with
-    # no more than 10 nodes per row with 10 % of the y-distance between rows
+    # no more than 10 nodes per row with 10 % of the x-distance between rows
     for n, node in enumerate(disconnected_nodes):
-        pos[node][1] = y_min - 0.1 * y_dist - ((n//10) % 10) * 0.1 * y_dist
-        pos[node][0] = x_min + ((n % 10) + 0.5) * x_dist / 10
+        pos[node][0] = x_min + ((n % 10) + 0.5) * (x_dist / 10)
+        pos[node][1] = y_min - 0.1 * y_dist * (1 + ((n//10) % 10))
 
 
 def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500,
-                   detangle: bool = True) -> Dict:
+                   untangle: bool = True) -> Dict:
     # Convert to networkx graph
     g = network.to_networkx()
+
     # Get layout
     pos = layout.kamada_kawai_layout(g, scale=scale_factor)
 
-    # Detangle nodes
-    if detangle:
-        _detangle_layout(g, pos)
-    return pos
+    # Untangle nodes
+    if untangle:
+        _untangle_layout(g, pos)
+
+    # Convert to cx layout: need to invert the y-axis
+    cx_pos = {node: [x, -y] for node, (x, y) in pos.items()}
+    return cx_pos
+
+
+def _get_symb(forward: bool, reverse: bool) -> str:
+    if forward and reverse:
+        return '<=>'
+    elif forward and not reverse:
+        return '=>'
+    elif not forward and reverse:
+        return '<='
+    else:
+        return '-'
 
 
 class GoNetworkAssembler:
@@ -163,9 +202,10 @@ class GoNetworkAssembler:
                                             type='string')
         for (source, target), (forward, reverse, undirected) \
                 in self.pair_properties.items():
+            interaction_symbol = _get_symb(bool(forward), bool(reverse))
             edge_id = self.network.create_edge(node_keys[source],
                                                node_keys[target],
-                                               'interacts with')
+                                               interaction_symbol)
             self.network.add_edge_attribute(edge_id, 'directed',
                                             True if forward else False,
                                             'boolean')
@@ -173,20 +213,49 @@ class GoNetworkAssembler:
                                             True if reverse else False,
                                             'boolean')
             if forward:
-                self.network.add_edge_attribute(edge_id, 'SOURCE => TARGET',
-                    edge_attribute_from_ev_counts(source, target, forward,
-                                                 True),
-                    'list_of_string')
+                self.network.add_edge_attribute(
+                    edge_id,
+                    f'{source} => {target}',
+                    edge_attribute_from_ev_counts(source, target, forward, True),
+                    'list_of_string'
+                )
             if reverse:
-                self.network.add_edge_attribute(edge_id, 'TARGET => SOURCE',
-                    edge_attribute_from_ev_counts(target, source, reverse,
-                                                  True),
-                    'list_of_string')
+                self.network.add_edge_attribute(
+                    edge_id,
+                    f'{target} => {source}',
+                    edge_attribute_from_ev_counts(target, source, reverse, True),
+                    'list_of_string'
+                )
             if undirected:
-                self.network.add_edge_attribute(edge_id, 'SOURCE - TARGET',
-                    edge_attribute_from_ev_counts(source, target, undirected,
-                                                  False),
-                    'list_of_string')
+                self.network.add_edge_attribute(
+                    edge_id,
+                    f'{source} - {target}',
+                    edge_attribute_from_ev_counts(source, target, undirected, False),
+                    'list_of_string'
+                )
+
+            # Add a linkout to all statements involving the pair
+            if forward and reverse:
+                agent_query = f'agent0={source}&agent1={target}'
+            elif forward and not reverse:
+                agent_query = f'subject={source}&object={target}'
+            elif not forward and reverse:
+                agent_query = f'subject={target}&object={source}'
+            else:  # not forward and not reverse:
+                # this implies there are only undirected statements and
+                # subject/object would also include directed statements
+                agent_query = f'agent0={source}&agent1={target}'
+            url = (
+                'https://db.indra.bio/statements/from_agents?'
+                f'{agent_query}&format=html&expand_all=true'
+            )
+            self.network.add_edge_attribute(
+                edge_id,
+                f'All statements involving {source} and {target}',
+                f'<a href="{url}" target="_blank">View all statements</a> '
+                f'involving {source} and {target}',
+                'string'
+            )
 
         # Get layout by name now that the network is built
         node_layout_by_name = _get_cx_layout(self.network)
