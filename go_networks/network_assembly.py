@@ -147,10 +147,10 @@ class GoNetworkAssembler:
             "networkType": "pathway",
             "GO ID": identifier,
             "GO hierarchy": "biological process",
+            "GO term": self.go_name,
             "Prov:wasGeneratedBy": "INDRA",
             "Organism": "Homo sapiens (Human)",
-            "Description": self.go_name,
-            "Methods": "This network was assembled automatically by INDRA "
+            "Description": "This network was assembled automatically by INDRA "
             "(http://indra.bio) by processing all available biomedical "
             "literature with multiple machine reading systems, and "
             "integrating curated pathway databases. The network represents "
