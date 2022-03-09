@@ -1,3 +1,7 @@
+"""
+This file contains the GoNetworkAssembler class, which is used to assemble
+an Ndex network from a set of statements related to a given GO term.
+"""
 import json
 import logging
 from typing import List, Dict
