@@ -408,7 +408,7 @@ if __name__ == "__main__":
             pickle.dump(networks, f)
 
     style_ncx = create_nice_cx_from_server(
-        server='http://test.ndexbio.org',
+        server='http://ndexbio.org',
         uuid=args.style_network)
 
     from indra.databases import ndex_client
