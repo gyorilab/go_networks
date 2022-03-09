@@ -22,20 +22,20 @@ from indra.databases import hgnc_client
 logger = logging.getLogger(__name__)
 
 context_prefixes = {
-    'hgnc': 'https://identifiers.org/hgnc:',
-    'hgnc.symbol': 'https://identifiers.org/hgnc.symbol:',
-    'pubmed': 'https://identifiers.org/pubmed:',
-    'uniprot': 'http://identifiers.org/uniprot:',
-    'ncbigene': 'http://identifiers.org/ncbigene:',
-    'mesh': 'https://identifiers.org/mesh:',
+    "hgnc": "https://identifiers.org/hgnc:",
+    "hgnc.symbol": "https://identifiers.org/hgnc.symbol:",
+    "pubmed": "https://identifiers.org/pubmed:",
+    "uniprot": "http://identifiers.org/uniprot:",
+    "ncbigene": "http://identifiers.org/ncbigene:",
+    "mesh": "https://identifiers.org/mesh:",
 }
 
 
 def get_aliases(gene_name):
     hgnc_id = hgnc_client.get_hgnc_id(gene_name)
-    db_refs = standardize_db_refs({'HGNC': hgnc_id})
+    db_refs = standardize_db_refs({"HGNC": hgnc_id})
     curies = [
-        f'{identifiers.get_identifiers_ns(db_ns)}:{db_id}'
+        f"{identifiers.get_identifiers_ns(db_ns)}:{db_id}"
         for db_ns, db_id in db_refs.items()
     ]
     return curies
@@ -45,7 +45,7 @@ def _get_english_from_stmt_type(stmt_type: str, source: str, target: str) -> str
     # Get Statement class from type
     stmt_cls = get_statement_by_name(stmt_type)
     # Get mock statement
-    if stmt_cls.__name__ == 'Complex':
+    if stmt_cls.__name__ == "Complex":
         stmt = stmt_cls([Agent(source), Agent(target)])
     else:
         stmt = stmt_cls(Agent(source), Agent(target))
@@ -59,23 +59,28 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
         english = _get_english_from_stmt_type(stmt_type, source, target)
 
         # Strip out trailing period
-        english = english[:-1] if english[-1] == '.' else english
+        english = english[:-1] if english[-1] == "." else english
         if directed:
-            url = f'https://db.indra.bio/statements/from_agents?' \
-                f'subject={source}&object={target}&type=' \
-                  f'{stmt_type}&format=html&expand_all=true'
+            url = (
+                f"https://db.indra.bio/statements/from_agents?"
+                f"subject={source}&object={target}&type="
+                f"{stmt_type}&format=html&expand_all=true"
+            )
         else:
-            url = f'https://db.indra.bio/statements/from_agents?' \
-                f'agent0={source}&agent1={target}&type=' \
-                  f'{stmt_type}&format=html&expand_all=true'
-        part = f'{english} (<a href="{url}" target="_blank">View {cnt} ' \
-               f'evidence{"s" if cnt > 1 else ""}</a>)'
+            url = (
+                f"https://db.indra.bio/statements/from_agents?"
+                f"agent0={source}&agent1={target}&type="
+                f"{stmt_type}&format=html&expand_all=true"
+            )
+        part = (
+            f'{english} (<a href="{url}" target="_blank">View {cnt} '
+            f'evidence{"s" if cnt > 1 else ""}</a>)'
+        )
         parts.append(part)
     return parts
 
 
-def _untangle_layout(g: nx.Graph,
-                     pos: Dict[str, List[float]]):
+def _untangle_layout(g: nx.Graph, pos: Dict[str, List[float]]):
     # Find the nodes that are disconnected from the rest of the graph
     disconnected_nodes = []
     for node in pos:
@@ -103,11 +108,12 @@ def _untangle_layout(g: nx.Graph,
     # no more than 10 nodes per row with 10 % of the x-distance between rows
     for n, node in enumerate(disconnected_nodes):
         pos[node][0] = x_min + ((n % 10) + 0.5) * (x_dist / 10)
-        pos[node][1] = y_min - 0.1 * y_dist * (1 + ((n//10) % 10))
+        pos[node][1] = y_min - 0.1 * y_dist * (1 + ((n // 10) % 10))
 
 
-def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500,
-                   untangle: bool = True) -> Dict:
+def _get_cx_layout(
+    network: NiceCXNetwork, scale_factor: float = 500, untangle: bool = True
+) -> Dict:
     # Convert to networkx graph
     g = network.to_networkx()
 
@@ -125,13 +131,13 @@ def _get_cx_layout(network: NiceCXNetwork, scale_factor: float = 500,
 
 def _get_symb(forward: bool, reverse: bool) -> str:
     if forward and reverse:
-        return '<=>'
+        return "<=>"
     elif forward and not reverse:
-        return '=>'
+        return "=>"
     elif not forward and reverse:
-        return '<='
+        return "<="
     else:
-        return '-'
+        return "-"
 
 
 class GoNetworkAssembler:
@@ -146,7 +152,7 @@ class GoNetworkAssembler:
         self.identifier = identifier
         self.entity_list = entity_list
         self.pair_properties = pair_properties
-        self.go_name = bio_ontology.get_name('GO', identifier)
+        self.go_name = bio_ontology.get_name("GO", identifier)
         self.network_attributes = {
             "networkType": "pathway",
             "GO ID": identifier,
@@ -184,81 +190,85 @@ class GoNetworkAssembler:
         """
         name = f"{self.identifier} ({self.go_name})"
         self.network = NiceCXNetwork()
-        self.network.set_network_attribute('name', name)
-        self.network.set_network_attribute('@context',
-            json.dumps(context_prefixes))
+        self.network.set_network_attribute("name", name)
+        self.network.set_network_attribute("@context", json.dumps(context_prefixes))
         for k, v in self.network_attributes.items():
-            self.network.set_network_attribute(k, v, 'string')
+            self.network.set_network_attribute(k, v, "string")
 
         node_keys = {}
         for gene in self.entity_list:
-            node_id = self.network.create_node(gene,
-                node_represents=f'hgnc.symbol:{gene}')
+            node_id = self.network.create_node(
+                gene, node_represents=f"hgnc.symbol:{gene}"
+            )
             node_keys[gene] = node_id
             aliases = get_aliases(gene)
-            self.network.add_node_attribute(property_of=node_id,
-                                            name='aliases',
-                                            values=aliases,
-                                            type='list_of_string')
-            self.network.add_node_attribute(property_of=node_id,
-                                            name='type',
-                                            values='protein',
-                                            type='string')
-        for (source, target), (forward, reverse, undirected) \
-                in self.pair_properties.items():
+            self.network.add_node_attribute(
+                property_of=node_id,
+                name="aliases",
+                values=aliases,
+                type="list_of_string",
+            )
+            self.network.add_node_attribute(
+                property_of=node_id, name="type", values="protein", type="string"
+            )
+        for (source, target), (
+            forward,
+            reverse,
+            undirected,
+        ) in self.pair_properties.items():
             interaction_symbol = _get_symb(bool(forward), bool(reverse))
-            edge_id = self.network.create_edge(node_keys[source],
-                                               node_keys[target],
-                                               interaction_symbol)
-            self.network.add_edge_attribute(edge_id, '__directed',
-                                            True if forward else False,
-                                            'boolean')
-            self.network.add_edge_attribute(edge_id, '__reverse directed',
-                                            True if reverse else False,
-                                            'boolean')
+            edge_id = self.network.create_edge(
+                node_keys[source], node_keys[target], interaction_symbol
+            )
+            self.network.add_edge_attribute(
+                edge_id, "__directed", True if forward else False, "boolean"
+            )
+            self.network.add_edge_attribute(
+                edge_id, "__reverse directed", True if reverse else False, "boolean"
+            )
             if forward:
                 self.network.add_edge_attribute(
                     edge_id,
-                    f'{source} => {target}',
+                    f"{source} => {target}",
                     edge_attribute_from_ev_counts(source, target, forward, True),
-                    'list_of_string'
+                    "list_of_string",
                 )
             if reverse:
                 self.network.add_edge_attribute(
                     edge_id,
-                    f'{target} => {source}',
+                    f"{target} => {source}",
                     edge_attribute_from_ev_counts(target, source, reverse, True),
-                    'list_of_string'
+                    "list_of_string",
                 )
             if undirected:
                 self.network.add_edge_attribute(
                     edge_id,
-                    f'{source} - {target}',
+                    f"{source} - {target}",
                     edge_attribute_from_ev_counts(source, target, undirected, False),
-                    'list_of_string'
+                    "list_of_string",
                 )
 
             # Add a linkout to all statements involving the pair
             if forward and reverse:
-                agent_query = f'agent0={source}&agent1={target}'
+                agent_query = f"agent0={source}&agent1={target}"
             elif forward and not reverse:
-                agent_query = f'subject={source}&object={target}'
+                agent_query = f"subject={source}&object={target}"
             elif not forward and reverse:
-                agent_query = f'subject={target}&object={source}'
+                agent_query = f"subject={target}&object={source}"
             else:  # not forward and not reverse:
                 # this implies there are only undirected statements and
                 # subject/object would also include directed statements
-                agent_query = f'agent0={source}&agent1={target}'
+                agent_query = f"agent0={source}&agent1={target}"
             url = (
-                'https://db.indra.bio/statements/from_agents?'
-                f'{agent_query}&format=html&expand_all=true'
+                "https://db.indra.bio/statements/from_agents?"
+                f"{agent_query}&format=html&expand_all=true"
             )
             self.network.add_edge_attribute(
                 edge_id,
-                f'All statements involving {source} and {target}',
+                f"All statements involving {source} and {target}",
                 f'<a href="{url}" target="_blank">View all statements</a> '
-                f'involving {source} and {target}',
-                'string'
+                f"involving {source} and {target}",
+                "string",
             )
 
         # Get layout by name now that the network is built
@@ -269,6 +279,6 @@ class GoNetworkAssembler:
         for gene in self.entity_list:
             x, y = node_layout_by_name[gene]
             node_id = node_keys[gene]
-            layout_aspect.append({'node': node_id, 'x': x, 'y': y})
+            layout_aspect.append({"node": node_id, "x": x, "y": y})
 
-        self.network.add_opaque_aspect('cartesianLayout', layout_aspect)
+        self.network.add_opaque_aspect("cartesianLayout", layout_aspect)
