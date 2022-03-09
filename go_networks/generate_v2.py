@@ -80,7 +80,7 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
 
     Filters applied:
         - Remove all rows that are curated as incorrect
-        - Remove all rows with only one source that is also a reader
+        - Remove all rows with only one evidence that is from a reader
         - Remove all rows where there is only one source, the source is
           sparser and the stmt type is Complex
 
@@ -103,7 +103,7 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
     else:
         t = tqdm(desc="Quality filtering", total=2)
 
-    # Filter out statements with only one source and a reader source
+    # Filter out statements with only one evidence from a reader source
     reader_sources_set = set(reader_sources)
     sif_df = sif_df[
         ~((sif_df.evidence_count == 1) &
