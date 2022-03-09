@@ -387,7 +387,7 @@ if __name__ == "__main__":
                         default='bdba6a7a-488a-11ec-b3be-0ac135e8bacf')
     parser.add_argument('--style-network',
                         help='Network ID of the style network',
-                        default='8e503fda-7110-11e9-b14c-0660b7976219')
+                        default='4c2006cd-9fef-11ec-b3be-0ac135e8bacf')
     parser.add_argument('--regenerate', action='store_true',
                         help='Regenerate the networks and re-cache them')
     args = parser.parse_args()
