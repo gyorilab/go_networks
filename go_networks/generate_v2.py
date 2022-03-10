@@ -381,6 +381,10 @@ def format_and_upload_network(
     ncx: NiceCXNetwork, network_set_id: str, style_ncx: NiceCXNetwork, **ndex_args
 ):
     """Take a NiceCXNetwork and upload it to NDEx."""
+    # Fixme: NiceCXNetwork.apply_style_from_network() does not exist in
+    #  ndex2==2.0.1 but ==2.0.1 is the requirement for INDRA
+    #  This method was added in 3.1.0:
+    #  https://github.com/ndexbio/ndex2-client/issues/43
     ncx.apply_style_from_network(style_ncx)
     network_url = ncx.upload_to(**ndex_args)
     network_id = network_url.split("/")[-1]
