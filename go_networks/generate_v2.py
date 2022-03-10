@@ -11,14 +11,13 @@ from pathlib import Path
 from typing import Optional, Dict, Set, Tuple, List
 
 import ndex2.client
-from ndex2 import create_nice_cx_from_server
+from ndex2 import create_nice_cx_from_server, NiceCXNetwork
 import networkx as nx
 import pandas as pd
 from tqdm import tqdm
 
 from go_networks.util import (
     DIRECTED_TYPES,
-    UNDIRECTED_TYPES,
     load_latest_sif,
 )
 from go_networks.network_assembly import GoNetworkAssembler
@@ -27,6 +26,8 @@ from indra.databases import uniprot_client, hgnc_client
 from indra.util.statement_presentation import reader_sources
 
 # Derived types
+PropAgg = Tuple[Dict[str, int], Dict[str, int], Dict[str, int]]
+PropDict = Dict[Tuple[str, str], PropAgg]
 Go2Genes = Dict[str, Set[str]]
 EvCountDict = Dict[str, Dict[str, int]]
 NameEntityMap = Dict[str, Tuple[str, str]]
@@ -50,9 +51,7 @@ def get_curation_set() -> Set[int]:
         curations = get_curations()
         # curations == {'pa_hash': 123456, 'tag': '<grounding tag>'}
         # Only keep the hashes for the curations that are not correct
-        wrong_hashes = {
-            c['pa_hash'] for c in curations if c['tag'] not in correct_tags
-        }
+        wrong_hashes = {c["pa_hash"] for c in curations if c["tag"] not in correct_tags}
         logger.info(f"Found {len(wrong_hashes)} hashes to filter out")
         return wrong_hashes
     except Exception as e:
@@ -106,20 +105,29 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
     # Filter out statements with only one evidence from a reader source
     reader_sources_set = set(reader_sources)
     sif_df = sif_df[
-        ~((sif_df.evidence_count == 1) &
-          (sif_df.source_counts.apply(
-            lambda d: d is None or
-            (len(d) == 1 and bool((set(d) & reader_sources_set))))
-          ))
+        ~(
+            (sif_df.evidence_count == 1)
+            & (
+                sif_df.source_counts.apply(
+                    lambda d: d is None
+                    or (len(d) == 1 and bool((set(d) & reader_sources_set)))
+                )
+            )
+        )
     ]
     t.update()
 
     # Remove all rows where the source is sparser and the stmt type is Complex
-    sif_df = sif_df[~(
-            (sif_df.stmt_type == "Complex") &
-            (sif_df.source_counts.apply(lambda d: d is None or
-                                        (set(d) == {"sparser"})))
-    )]
+    sif_df = sif_df[
+        ~(
+            (sif_df.stmt_type == "Complex")
+            & (
+                sif_df.source_counts.apply(
+                    lambda d: d is None or (set(d) == {"sparser"})
+                )
+            )
+        )
+    ]
     t.update()
     t.close()
 
@@ -128,7 +136,7 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
 
 def generate_props(
     sif_file: str, props_file: Optional[str] = None, apply_filters: bool = True
-) -> Dict[str, List[Dict[str, int]]]:
+) -> PropDict:
     """Generate properties per pair from the Sif dump
 
     For each pair of genes (A,B) (excluding self loops), generate the
@@ -166,8 +174,8 @@ def generate_props(
         props_by_hash = {}
 
         def get_direction(row, pair):
-            directed = (row.stmt_type in DIRECTED_TYPES)
-            direction = (row.agA_name == pair[0])
+            directed = row.stmt_type in DIRECTED_TYPES
+            direction = row.agA_name == pair[0]
             if directed:
                 if direction:
                     return "forward"
@@ -183,11 +191,11 @@ def generate_props(
                 props_by_hash[row.stmt_hash] = {
                     "ev_count": row.evidence_count,
                     "stmt_type": row.stmt_type,
-                    "direction": get_direction(row, pair)
+                    "direction": get_direction(row, pair),
                 }
         hashes_by_pair = dict(hashes_by_pair)
 
-        def aggregate_props(props):
+        def aggregate_props(props) -> PropAgg:
             ev_forward = defaultdict(int)
             ev_reverse = defaultdict(int)
             ev_undirected = defaultdict(int)
@@ -202,8 +210,7 @@ def generate_props(
 
         props_by_pair = {}
         for pair, hashes in hashes_by_pair.items():
-            props_by_pair[pair] = aggregate_props([props_by_hash[h]
-                                                   for h in hashes])
+            props_by_pair[pair] = aggregate_props([props_by_hash[h] for h in hashes])
 
         # Write to file if provided
         if props_file:
@@ -219,36 +226,42 @@ def genes_by_go_id():
     """Load the gene/GO annotations as a pandas data frame."""
     go_dag = obonet.read_obo(GO_OBO_PATH)
 
-    goa = pd.read_csv(GO_ANNOTS_PATH, sep='\t',
-                      comment='!', dtype=str,
-                      header=None,
-                      names=['DB',
-                             'DB_ID',
-                             'DB_Symbol',
-                             'Qualifier',
-                             'GO_ID',
-                             'DB_Reference',
-                             'Evidence_Code',
-                             'With_From',
-                             'Aspect',
-                             'DB_Object_Name',
-                             'DB_Object_Synonym',
-                             'DB_Object_Type',
-                             'Taxon',
-                             'Date',
-                             'Assigned',
-                             'Annotation_Extension',
-                             'Gene_Product_Form_ID'])
+    goa = pd.read_csv(
+        GO_ANNOTS_PATH,
+        sep="\t",
+        comment="!",
+        dtype=str,
+        header=None,
+        names=[
+            "DB",
+            "DB_ID",
+            "DB_Symbol",
+            "Qualifier",
+            "GO_ID",
+            "DB_Reference",
+            "Evidence_Code",
+            "With_From",
+            "Aspect",
+            "DB_Object_Name",
+            "DB_Object_Synonym",
+            "DB_Object_Type",
+            "Taxon",
+            "Date",
+            "Assigned",
+            "Annotation_Extension",
+            "Gene_Product_Form_ID",
+        ],
+    )
     # Filter out all "NOT" negative evidences
-    goa['Qualifier'].fillna('', inplace=True)
-    goa = goa[~goa['Qualifier'].str.startswith('NOT')]
+    goa["Qualifier"].fillna("", inplace=True)
+    goa = goa[~goa["Qualifier"].str.startswith("NOT")]
     # We can filter to just GO terms in the ontology since
     # obsolete terms are not included in the GO DAG
-    goa = goa[goa['GO_ID'].isin(go_dag)]
+    goa = goa[goa["GO_ID"].isin(go_dag)]
 
     genes_by_go_id = defaultdict(set)
     for go_id, up_id in zip(goa.GO_ID, goa.DB_ID):
-        if go_dag.nodes[go_id]['namespace'] != 'biological_process':
+        if go_dag.nodes[go_id]["namespace"] != "biological_process":
             continue
         hgnc_id = uniprot_client.get_hgnc_id(up_id)
         if hgnc_id:
@@ -262,9 +275,10 @@ def genes_by_go_id():
     return genes_by_go_id
 
 
-def build_networks(go2genes_map: Go2Genes,
-                   pair_props: Dict[Tuple, List[Dict[str, int]]],
-                   ) -> Dict[str, GoNetworkAssembler]:
+def build_networks(
+    go2genes_map: Go2Genes,
+    pair_props: PropDict,
+) -> Dict[str, GoNetworkAssembler]:
     """Build networks per go-id associated genes
 
     Parameters
@@ -283,12 +297,16 @@ def build_networks(go2genes_map: Go2Genes,
     skipped = 0
     # Only pass the relevant parts of the pair_props dict
     for go_id, gene_set in tqdm(go2genes_map.items(), total=len(go2genes_map)):
+
         def _key(g1, g2):
             return tuple(sorted([g1, g2]))
+
         # Get relevant pairs from pair_properties
-        prop_dict = {_key(g1, g2): pair_props[_key(g1, g2)]
-                     for g1, g2 in combinations(gene_set, 2)
-                     if _key(g1, g2) in pair_props}
+        prop_dict = {
+            _key(g1, g2): pair_props[_key(g1, g2)]
+            for g1, g2 in combinations(gene_set, 2)
+            if _key(g1, g2) in pair_props
+        }
 
         if not prop_dict:
             # logger.info(f"No statements for ID {go_id}")
@@ -324,13 +342,18 @@ def filter_self_loops(df):
 
 
 def filter_go_ids(go2genes_map):
-    return {go_id: genes for go_id, genes in go2genes_map.items()
-            if min_gene_count <= len(genes) <= max_gene_count}
+    return {
+        go_id: genes
+        for go_id, genes in go2genes_map.items()
+        if min_gene_count <= len(genes) <= max_gene_count
+    }
 
 
-def generate(sif_file: Optional[str] = None,
-             props_file: Optional[str] = None,
-             apply_filters: bool = True):
+def generate(
+    sif_file: Optional[str] = None,
+    props_file: Optional[str] = None,
+    apply_filters: bool = True,
+):
     """Generate new GO networks from INDRA statements
 
     Parameters
@@ -354,14 +377,16 @@ def generate(sif_file: Optional[str] = None,
     return build_networks(go2genes_map, sif_props)
 
 
-def format_and_upload_network(ncx, network_set_id, style_ncx,
-                              **ndex_args):
+def format_and_upload_network(
+    ncx: NiceCXNetwork, network_set_id: str, style_ncx: NiceCXNetwork, **ndex_args
+):
     """Take a NiceCXNetwork and upload it to NDEx."""
     ncx.apply_style_from_network(style_ncx)
     network_url = ncx.upload_to(**ndex_args)
-    network_id = network_url.split('/')[-1]
-    nd = ndex2.client.Ndex2(**{(k if k != 'server' else 'host'): v
-                               for k, v in ndex_args.items()})
+    network_id = network_url.split("/")[-1]
+    nd = ndex2.client.Ndex2(
+        **{(k if k != "server" else "host"): v for k, v in ndex_args.items()}
+    )
     try:
         nd.make_network_public(network_id)
     except Exception as e:
@@ -370,8 +395,10 @@ def format_and_upload_network(ncx, network_set_id, style_ncx,
     try:
         nd.add_networks_to_networkset(network_set_id, [network_id])
     except Exception as e:
-        logger.warning(f"Failed to add network {network_id} to network set "
-                       f"{network_set_id}: {e}")
+        logger.warning(
+            f"Failed to add network {network_id} to network set "
+            f"{network_set_id}: {e}"
+        )
 
     return network_id
 
@@ -379,23 +406,32 @@ def format_and_upload_network(ncx, network_set_id, style_ncx,
 if __name__ == "__main__":
     # Setup argument parser
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument('--local-sif',
-                        help='Local SIF dump file to load. If not provided, '
-                             'the latest SIF dump will be fetched from S3.')
-    parser.add_argument('--network-set',
-                        help='Network set ID to add the new networks to.',
-                        default='bdba6a7a-488a-11ec-b3be-0ac135e8bacf')
-    parser.add_argument('--style-network',
-                        help='Network ID of the style network',
-                        default='4c2006cd-9fef-11ec-b3be-0ac135e8bacf')
-    parser.add_argument('--regenerate', action='store_true',
-                        help='Regenerate the networks and re-cache them')
+    parser.add_argument(
+        "--local-sif",
+        help="Local SIF dump file to load. If not provided, "
+        "the latest SIF dump will be fetched from S3.",
+    )
+    parser.add_argument(
+        "--network-set",
+        help="Network set ID to add the new networks to.",
+        default="bdba6a7a-488a-11ec-b3be-0ac135e8bacf",
+    )
+    parser.add_argument(
+        "--style-network",
+        help="Network ID of the style network",
+        default="4c2006cd-9fef-11ec-b3be-0ac135e8bacf",
+    )
+    parser.add_argument(
+        "--regenerate",
+        action="store_true",
+        help="Regenerate the networks and re-cache them",
+    )
     args = parser.parse_args()
     logger.info(f"Using network set id {args.network_set}")
     logger.info(f"Using network style {args.style_network}")
 
     if Path(NETWORKS_FILE).exists() and not args.regenerate:
-        with open(NETWORKS_FILE, 'rb') as fh:
+        with open(NETWORKS_FILE, "rb") as fh:
             networks = pickle.load(fh)
     else:
         if args.regenerate:
@@ -404,18 +440,22 @@ if __name__ == "__main__":
         else:
             props_file = PROPS_FILE
         networks = generate(args.local_sif, props_file, apply_filters=True)
-        with open(NETWORKS_FILE, 'wb') as f:
+        with open(NETWORKS_FILE, "wb") as f:
             pickle.dump(networks, f)
 
     style_ncx = create_nice_cx_from_server(
-        server='http://ndexbio.org',
-        uuid=args.style_network)
+        server="http://ndexbio.org", uuid=args.style_network
+    )
 
     from indra.databases import ndex_client
+
     username, password = ndex_client.get_default_ndex_cred(ndex_cred=None)
-    ndex_args = {'server': 'http://public.ndexbio.org',
-                 'username': username,
-                 'password': password}
+    ndex_args = {
+        "server": "http://public.ndexbio.org",
+        "username": username,
+        "password": password,
+    }
     for go_id, network in tqdm(sorted(networks.items(), key=lambda x: x[0])):
-        network_id = format_and_upload_network(network, args.network_set,
-                                               style_ncx, **ndex_args)
+        network_id = format_and_upload_network(
+            network, args.network_set, style_ncx, **ndex_args
+        )
