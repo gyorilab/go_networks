@@ -135,7 +135,10 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def generate_props(
-    sif_file: str, props_file: Optional[str] = None, apply_filters: bool = True
+    sif_file: str,
+    props_file: Optional[str] = None,
+    apply_filters: bool = True,
+    regenerate: bool = False,
 ) -> PropDict:
     """Generate properties per pair from the Sif dump
 
@@ -147,9 +150,26 @@ def generate_props(
           type for B->A statements
         - "SOURCE - TARGET": aggregate number of evidences by statement type
           for A-B undirected statements
-    """
 
-    if props_file is not None and Path(props_file).is_file():
+    Parameters
+    ----------
+    sif_file :
+        The SIF dump file
+    props_file :
+        The file to cache the properties to
+    apply_filters :
+        Whether to apply quality filters to the SIF dataframe
+    regenerate :
+        Whether to regenerate the props. If a props file path is provided,
+        the old props file will be overwritten.
+
+    Returns
+    -------
+    :
+        The properties dictionary
+    """
+    # If the props file exists, load it, unless we want to regenerate
+    if not regenerate and props_file is not None and Path(props_file).is_file():
         logger.info(f"Loading property lookup from {props_file}")
         with Path(props_file).open(mode="rb") as fr:
             props_by_pair = pickle.load(fr)
@@ -214,9 +234,9 @@ def generate_props(
 
         # Write to file if provided
         if props_file:
-            logger.info(f"Saving property lookup to {props_file}")
             Path(props_file).absolute().parent.mkdir(exist_ok=True, parents=True)
             with Path(props_file).open(mode="wb") as fo:
+                logger.info(f"Saving property lookup to {props_file}")
                 pickle.dump(obj=props_by_pair, file=fo)
 
     return props_by_pair
@@ -355,6 +375,7 @@ def generate(
     sif_file: Optional[str] = None,
     props_file: Optional[str] = None,
     apply_filters: bool = True,
+    regenerate: bool = False,
 ):
     """Generate new GO networks from INDRA statements
 
@@ -367,6 +388,9 @@ def generate(
         from sif dump.
     apply_filters :
         If True, apply filters to the data before generating networks.
+    regenerate :
+        If True, regenerate the props from scratch and overwrite the existing
+        props file, if it exists.
     """
     # Make genes by GO ID dict
     go2genes_map = genes_by_go_id()
@@ -375,7 +399,9 @@ def generate(
     go2genes_map = filter_go_ids(go2genes_map)
 
     # Generate properties
-    sif_props = generate_props(sif_file, props_file, apply_filters=apply_filters)
+    sif_props = generate_props(
+        sif_file, props_file, apply_filters=apply_filters, regenerate=regenerate
+    )
 
     # Iterate by GO ID and for each list of genes, build a network
     return build_networks(go2genes_map, sif_props)
@@ -411,8 +437,13 @@ def format_and_upload_network(
     return network_id
 
 
-def main(local_sif: str, network_set: str, style_network: str,
-         regenerate: bool, test_go_term: Optional[str] = None):
+def main(
+    local_sif: str,
+    network_set: str,
+    style_network: str,
+    regenerate: bool,
+    test_go_term: Optional[str] = None,
+):
     global TEST_GO_ID
     logger.info(f"Using network set id {network_set}")
     logger.info(f"Using network style {style_network}")
@@ -420,16 +451,12 @@ def main(local_sif: str, network_set: str, style_network: str,
         logger.info(f"Testing GO term {test_go_term}")
         TEST_GO_ID = test_go_term
 
-    if Path(NETWORKS_FILE).exists() and not regenerate:
-        with open(NETWORKS_FILE, "rb") as fh:
-            networks = pickle.load(fh)
-    else:
-        if regenerate:
-            logger.info("Regenerating props and networks")
-            props_file = None
-        else:
-            props_file = PROPS_FILE
-        networks = generate(local_sif, props_file, apply_filters=True)
+    networks = generate(
+        local_sif, PROPS_FILE, apply_filters=True, regenerate=regenerate
+    )
+
+    # Only cache the networks if we're not testing
+    if not test_go_term:
         with open(NETWORKS_FILE, "wb") as f:
             logger.info(f"Writing networks to {NETWORKS_FILE}")
             pickle.dump(networks, f)
