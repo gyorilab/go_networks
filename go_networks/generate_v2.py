@@ -298,7 +298,7 @@ def build_networks(
     # Only pass the relevant parts of the pair_props dict
     for go_id, gene_set in tqdm(go2genes_map.items(), total=len(go2genes_map)):
         # debug: skip all but one go-id
-        if go_id != 'GO:0046784':
+        if go_id != 'GO:2001239':
             continue
 
         def _key(g1, g2):
