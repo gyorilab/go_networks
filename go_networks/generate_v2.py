@@ -1,14 +1,13 @@
 """
 Generate GO Networks from a list of GO terms and the Sif dump.
 """
-import argparse
 from collections import defaultdict
 import logging
 import pickle
 import obonet
 from itertools import combinations
 from pathlib import Path
-from typing import Optional, Dict, Set, Tuple, List
+from typing import Optional, Dict, Set, Tuple
 
 import ndex2.client
 from ndex2 import create_nice_cx_from_server, NiceCXNetwork
@@ -38,6 +37,7 @@ GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
 PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
 NETWORKS_FILE = HERE.joinpath("networks.pkl").absolute().as_posix()
+TEST_GO_ID = None
 
 min_gene_count = 5
 max_gene_count = 200
@@ -297,8 +297,7 @@ def build_networks(
     skipped = 0
     # Only pass the relevant parts of the pair_props dict
     for go_id, gene_set in tqdm(go2genes_map.items(), total=len(go2genes_map)):
-        # debug: skip all but one go-id
-        if go_id != 'GO:2001239':
+        if TEST_GO_ID and go_id != TEST_GO_ID:
             continue
 
         def _key(g1, g2):
@@ -366,6 +365,8 @@ def generate(
     props_file :
         If provided, load property lookup from this file. Default: generate
         from sif dump.
+    apply_filters :
+        If True, apply filters to the data before generating networks.
     """
     # Make genes by GO ID dict
     go2genes_map = genes_by_go_id()
@@ -410,48 +411,31 @@ def format_and_upload_network(
     return network_id
 
 
-if __name__ == "__main__":
-    # Setup argument parser
-    parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument(
-        "--local-sif",
-        help="Local SIF dump file to load. If not provided, "
-        "the latest SIF dump will be fetched from S3.",
-    )
-    parser.add_argument(
-        "--network-set",
-        help="Network set ID to add the new networks to.",
-        default="bdba6a7a-488a-11ec-b3be-0ac135e8bacf",
-    )
-    parser.add_argument(
-        "--style-network",
-        help="Network ID of the style network",
-        default="4c2006cd-9fef-11ec-b3be-0ac135e8bacf",
-    )
-    parser.add_argument(
-        "--regenerate",
-        action="store_true",
-        help="Regenerate the networks and re-cache them",
-    )
-    args = parser.parse_args()
-    logger.info(f"Using network set id {args.network_set}")
-    logger.info(f"Using network style {args.style_network}")
+def main(local_sif: str, network_set: str, style_network: str,
+         regenerate: bool, test_go_term: Optional[str] = None):
+    global TEST_GO_ID
+    logger.info(f"Using network set id {network_set}")
+    logger.info(f"Using network style {style_network}")
+    if test_go_term:
+        logger.info(f"Testing GO term {test_go_term}")
+        TEST_GO_ID = test_go_term
 
-    if Path(NETWORKS_FILE).exists() and not args.regenerate:
+    if Path(NETWORKS_FILE).exists() and not regenerate:
         with open(NETWORKS_FILE, "rb") as fh:
             networks = pickle.load(fh)
     else:
-        if args.regenerate:
+        if regenerate:
             logger.info("Regenerating props and networks")
             props_file = None
         else:
             props_file = PROPS_FILE
-        networks = generate(args.local_sif, props_file, apply_filters=True)
+        networks = generate(local_sif, props_file, apply_filters=True)
         with open(NETWORKS_FILE, "wb") as f:
+            logger.info(f"Writing networks to {NETWORKS_FILE}")
             pickle.dump(networks, f)
 
     style_ncx = create_nice_cx_from_server(
-        server="http://ndexbio.org", uuid=args.style_network
+        server="http://ndexbio.org", uuid=style_network
     )
 
     from indra.databases import ndex_client
@@ -464,5 +448,7 @@ if __name__ == "__main__":
     }
     for go_id, network in tqdm(sorted(networks.items(), key=lambda x: x[0])):
         network_id = format_and_upload_network(
-            network, args.network_set, style_ncx, **ndex_args
+            network, network_set, style_ncx, **ndex_args
         )
+        if TEST_GO_ID:
+            print(f"Testing network uuid {network_id}")
