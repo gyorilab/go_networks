@@ -159,8 +159,8 @@ class GoNetworkAssembler:
             "GO hierarchy": "biological process",
             "GO term": self.go_name,
             "Prov:wasGeneratedBy": "INDRA",
-            "Organism": "Homo sapiens (Human)",
-            "Description": "This network was assembled automatically by INDRA "
+            "organism": "Human, 9606, H.sapiens",
+            "description": "This network was assembled automatically by INDRA "
             "(http://indra.bio) by processing all available biomedical "
             "literature with multiple machine reading systems, and "
             "integrating curated pathway databases. The network represents "
