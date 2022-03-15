@@ -4,7 +4,7 @@ an Ndex network from a set of statements related to a given GO term.
 """
 import json
 import logging
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import networkx as nx
 from networkx.drawing import layout
@@ -53,7 +53,9 @@ def _get_english_from_stmt_type(stmt_type: str, source: str, target: str) -> str
     return EnglishAssembler([stmt]).make_model()
 
 
-def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
+def edge_attribute_from_ev_counts(
+    source, target, ev_counts, directed
+) -> List[Tuple[str, int]]:
     parts = []
     for stmt_type, cnt in sorted(ev_counts.items(), key=lambda x: x[1], reverse=True):
         english = _get_english_from_stmt_type(stmt_type, source, target)
@@ -72,10 +74,7 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed):
                 f"agent0={source}&agent1={target}&type="
                 f"{stmt_type}&format=html&expand_all=true"
             )
-        part = (
-            f'{english} (<a href="{url}" target="_blank">View {cnt} '
-            f'evidence{"s" if cnt > 1 else ""}</a>)'
-        )
+        part = (f'{english} (<a href="{url}" target="_blank">{cnt}</a>)', cnt)
         parts.append(part)
     return parts
 
@@ -226,26 +225,22 @@ class GoNetworkAssembler:
             self.network.add_edge_attribute(
                 edge_id, "__reverse directed", True if reverse else False, "boolean"
             )
+            # Get lists of english assembled statements with linkouts
+            total_ev_count = sum(
+                sum(d.values()) for d in (forward, reverse, undirected)
+            )
+            all_statements = []
             if forward:
-                self.network.add_edge_attribute(
-                    edge_id,
-                    f"{source} => {target}",
-                    edge_attribute_from_ev_counts(source, target, forward, True),
-                    "list_of_string",
+                all_statements.extend(
+                    edge_attribute_from_ev_counts(source, target, forward, True)
                 )
             if reverse:
-                self.network.add_edge_attribute(
-                    edge_id,
-                    f"{target} => {source}",
-                    edge_attribute_from_ev_counts(target, source, reverse, True),
-                    "list_of_string",
+                all_statements.extend(
+                    edge_attribute_from_ev_counts(target, source, reverse, True)
                 )
             if undirected:
-                self.network.add_edge_attribute(
-                    edge_id,
-                    f"{source} - {target}",
-                    edge_attribute_from_ev_counts(source, target, undirected, False),
-                    "list_of_string",
+                all_statements.extend(
+                    edge_attribute_from_ev_counts(source, target, undirected, False)
                 )
 
             # Add a linkout to all statements involving the pair
