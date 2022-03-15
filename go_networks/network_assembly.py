@@ -53,9 +53,7 @@ def _get_english_from_stmt_type(stmt_type: str, source: str, target: str) -> str
     return EnglishAssembler([stmt]).make_model()
 
 
-def edge_attribute_from_ev_counts(
-    source, target, ev_counts, directed
-) -> List[Tuple[str, int]]:
+def edge_attribute_from_ev_counts(source, target, ev_counts, directed) -> List[str]:
     parts = []
     for stmt_type, cnt in sorted(ev_counts.items(), key=lambda x: x[1], reverse=True):
         english = _get_english_from_stmt_type(stmt_type, source, target)
@@ -74,7 +72,7 @@ def edge_attribute_from_ev_counts(
                 f"agent0={source}&agent1={target}&type="
                 f"{stmt_type}&format=html&expand_all=true"
             )
-        part = (f'{english} (<a href="{url}" target="_blank">{cnt}</a>)', cnt)
+        part = f'{english} (<a href="{url}" target="_blank">{cnt}</a>)'
         parts.append(part)
     return parts
 
@@ -242,6 +240,12 @@ class GoNetworkAssembler:
                 all_statements.extend(
                     edge_attribute_from_ev_counts(source, target, undirected, False)
                 )
+
+            # Format the statements to an unordered list:
+            html_list = "<ul>"
+            for english in all_statements:
+                html_list += f"<li>{english}</li>"
+            html_list += "</ul>"
 
             # Add a linkout to all statements involving the pair
             if forward and reverse:
