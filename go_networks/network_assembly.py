@@ -262,11 +262,16 @@ class GoNetworkAssembler:
                 "https://db.indra.bio/statements/from_agents?"
                 f"{agent_query}&format=html&expand_all=true"
             )
+            # Edge attribute value should be:
+            # View All Evidence (123)
+            #   - Statement 1
+            #   - Statement 2
+            # etc.
             self.network.add_edge_attribute(
                 edge_id,
-                f"All statements involving {source} and {target}",
-                f'<a href="{url}" target="_blank">View all statements</a> '
-                f"involving {source} and {target}",
+                f"Relationship",
+                f'<a href="{url}" target="_blank">View all evidence '
+                f"({total_ev_count})</a> {html_list}",
                 "string",
             )
 
