@@ -270,7 +270,7 @@ class GoNetworkAssembler:
             self.network.add_edge_attribute(
                 edge_id,
                 f"Relationship",
-                f'<a href="{url}" target="_blank">View all evidence '
+                f'<a href="{url}" target="_blank">View all evidences '
                 f"({total_ev_count})</a> {html_list}",
                 "string",
             )
