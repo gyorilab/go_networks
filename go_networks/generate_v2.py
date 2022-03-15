@@ -135,7 +135,7 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def generate_props(
-    sif_file: str,
+    sif_file: Optional[str] = None,
     props_file: Optional[str] = None,
     apply_filters: bool = True,
     regenerate: bool = False,
@@ -400,7 +400,10 @@ def generate(
 
     # Generate properties
     sif_props = generate_props(
-        sif_file, props_file, apply_filters=apply_filters, regenerate=regenerate
+        sif_file=sif_file,
+        props_file=props_file,
+        apply_filters=apply_filters,
+        regenerate=regenerate,
     )
 
     # Iterate by GO ID and for each list of genes, build a network
@@ -438,10 +441,10 @@ def format_and_upload_network(
 
 
 def main(
-    local_sif: str,
     network_set: str,
     style_network: str,
     regenerate: bool,
+    local_sif: Optional[str] = None,
     test_go_term: Optional[str] = None,
 ):
     global TEST_GO_ID
@@ -452,7 +455,10 @@ def main(
         TEST_GO_ID = test_go_term
 
     networks = generate(
-        local_sif, PROPS_FILE, apply_filters=True, regenerate=regenerate
+        sif_file=local_sif,
+        props_file=PROPS_FILE,
+        apply_filters=True,
+        regenerate=regenerate,
     )
 
     # Only cache the networks if we're not testing

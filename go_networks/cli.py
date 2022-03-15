@@ -33,8 +33,8 @@ def main():
 @click.option(
     "--local-sif",
     type=str,
-    required=True,
-    help="Path to a local SIF file.",
+    help="Path to a local SIF file. Only needed if we are regenerating the "
+    "properties file.",
 )
 def test(
     regenerate_props: bool,
