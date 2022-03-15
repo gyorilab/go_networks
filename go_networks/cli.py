@@ -5,6 +5,10 @@ from generate_v2 import main as gen_networks
 import click
 
 
+TEST_SET = "d7acdc1d-a08f-11ec-b3be-0ac135e8bacf"
+PROD_SET = "4c2006cd-9fef-11ec-b3be-0ac135e8bacf"
+
+
 @click.group("go-networks")
 def main():
     """Update the go_networks"""
@@ -47,7 +51,7 @@ def test(
     # d7acdc1d-a08f-11ec-b3be-0ac135e8bacf
     gen_networks(
         local_sif=local_sif,
-        network_set="d7acdc1d-a08f-11ec-b3be-0ac135e8bacf",
+        network_set=TEST_SET,
         style_network=style_network,
         regenerate=regenerate_props,
         test_go_term=go_term,
@@ -64,7 +68,7 @@ def test(
 @click.option(
     "--style-network",
     type=str,
-    default="4c2006cd-9fef-11ec-b3be-0ac135e8bacf",
+    default=PROD_SET,
     help="Network ID of the style network",
 )
 @click.option(
