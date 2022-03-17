@@ -46,16 +46,57 @@ logger = logging.getLogger(__name__)
 
 
 def get_curation_set() -> Set[int]:
+
+    def _is_incorrect(stmt_hash, evid_hash):
+        # Evidence is incorrect if it was only curated as incorrect
+        if evid_hash in correct_stmt_evid[stmt_hash]['incorrect'] and \
+                evid_hash not in correct_stmt_evid[stmt_hash]['correct']:
+            return True
+        return False
+
     correct_tags = {"correct", "hypothesis", "act_vs_amt"}
+
     try:
         curations = get_curations()
-        # curations == {'pa_hash': 123456, 'tag': '<grounding tag>'}
-        # Only keep the hashes for the curations that are not correct
-        wrong_hashes = {c["pa_hash"] for c in curations if c["tag"] not in correct_tags}
-        logger.info(f"Found {len(wrong_hashes)} hashes to filter out")
-        return wrong_hashes
     except Exception as e:
         logger.error(f"Could not get curations: {e}")
+        return set()
+
+    # If a statement only has incorrect curations, it is overall incorrect
+    # If a statement has any correct curations, it is overall correct
+    correct = {c["pa_hash"] for c in curations if c["tag"] in correct_tags}
+    incorrect = {c["pa_hash"] for c in curations if c["pa_hash"] not in correct}
+
+    correct_stmt_evid = {}
+    for c in curations:
+        pa_hash = c["pa_hash"]
+        if pa_hash in correct:
+            if pa_hash not in correct_stmt_evid:
+                correct_stmt_evid[pa_hash] = defaultdict(set)
+            if c["tag"] in correct_tags:
+                correct_stmt_evid[pa_hash]["correct"].add(c["source_hash"])
+            else:
+                correct_stmt_evid[pa_hash]["incorrect"].add(c["source_hash"])
+
+    hashes_out = set()
+    for c in curations:
+        pa_hash = c["pa_hash"]
+        src_hash = c["source_hash"]
+        if pa_hash not in incorrect:
+            # Check evidences in detail
+            if pa_hash in correct_stmt_evid:
+                if _is_incorrect(pa_hash, src_hash):
+                    hashes_out.add(pa_hash)
+                else:
+                    pass
+            else:
+                pass
+        else:
+            hashes_out.add(pa_hash)
+
+    logger.info(f"Found {len(hashes_out)} hashes to filter out")
+
+    return hashes_out
 
 
 def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
