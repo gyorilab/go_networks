@@ -31,6 +31,8 @@ def main():
 @click.option(
     "--style-network",
     type=str,
+    # See style network at
+    # https://www.ndexbio.org/viewer/networks/4c2006cd-9fef-11ec-b3be-0ac135e8bacf
     default="4c2006cd-9fef-11ec-b3be-0ac135e8bacf",
     help="Network ID of the style network",
 )
