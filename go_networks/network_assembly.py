@@ -221,7 +221,7 @@ class GoNetworkAssembler:
                 edge_id, "__directed", True if forward else False, "boolean"
             )
             self.network.add_edge_attribute(
-                edge_id, "__reverse directed", True if reverse else False, "boolean"
+                edge_id, "__reverse_directed", True if reverse else False, "boolean"
             )
             # Get lists of english assembled statements with linkouts
             total_ev_count = sum(
