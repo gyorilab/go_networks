@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_curation_set() -> Set[int]:
-    correct_tags = {"correct", "hypothesis", "activity_amount"}
+    correct_tags = {"correct", "hypothesis", "act_vs_amt"}
     try:
         curations = get_curations()
         # curations == {'pa_hash': 123456, 'tag': '<grounding tag>'}
