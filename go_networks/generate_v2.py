@@ -37,6 +37,7 @@ GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
 PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
 NETWORKS_FILE = HERE.joinpath("networks.pkl").absolute().as_posix()
+DEFAULT_NDEX_SERVER = "http://ndexbio.org"
 TEST_GO_ID = None
 
 min_gene_count = 5
@@ -487,6 +488,7 @@ def main(
     regenerate: bool,
     local_sif: Optional[str] = None,
     test_go_term: Optional[str] = None,
+    ndex_server_style: str = DEFAULT_NDEX_SERVER,
 ):
     global TEST_GO_ID
     logger.info(f"Using network set id {network_set}")
@@ -494,6 +496,8 @@ def main(
     if test_go_term:
         logger.info(f"Testing GO term {test_go_term}")
         TEST_GO_ID = test_go_term
+
+    logger.info(f"Using ndex server {ndex_server_style} for style")
 
     networks = generate(
         sif_file=local_sif,
@@ -509,7 +513,7 @@ def main(
             pickle.dump(networks, f)
 
     style_ncx = create_nice_cx_from_server(
-        server="http://ndexbio.org", uuid=style_network
+        server=ndex_server_style, uuid=style_network
     )
 
     from indra.databases import ndex_client

@@ -42,11 +42,19 @@ def main():
     help="Path to a local SIF file. Only needed if we are regenerating the "
     "properties file.",
 )
+@click.option(
+    "--ndex-server-style",
+    type=str,
+    default="http://ndexbio.org",
+    help="The URL of the ndex server to use for the style network. "
+    "Default: http://ndexbio.org",
+)
 def test(
     regenerate_props: bool,
     go_term: str,
     style_network: str,
     local_sif: Optional[str] = None,
+    ndex_server_style: str = "http://ndexbio.org",
 ):
     """Build a test network."""
     # Use the test network set:
@@ -57,6 +65,7 @@ def test(
         style_network=style_network,
         regenerate=regenerate_props,
         test_go_term=go_term,
+        ndex_server_style=ndex_server_style,
     )
 
 
