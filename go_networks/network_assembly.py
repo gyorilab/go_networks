@@ -228,9 +228,9 @@ class GoNetworkAssembler:
             total_ev_count = sum(
                 sum(d.values()) for d in (forward, reverse, undirected)
             )
-            # Add __relationship_score as attribute == ln(total_ev_count)
+            # Add __relationship_score as attribute == 1+ln(total_ev_count)
             self.network.add_edge_attribute(
-                edge_id, "__relationship_score", log(total_ev_count), "double"
+                edge_id, "__relationship_score", 1 + log(total_ev_count), "double"
             )
 
             all_statements = []
