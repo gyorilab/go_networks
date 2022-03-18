@@ -8,6 +8,7 @@ from typing import List, Dict, Tuple
 
 import networkx as nx
 from networkx.drawing import layout
+from numpy import log
 
 from ndex2 import NiceCXNetwork
 
@@ -227,6 +228,11 @@ class GoNetworkAssembler:
             total_ev_count = sum(
                 sum(d.values()) for d in (forward, reverse, undirected)
             )
+            # Add __relationship_score as attribute == ln(total_ev_count)
+            self.network.add_edge_attribute(
+                edge_id, "__relationship_score", log(total_ev_count), "double"
+            )
+
             all_statements = []
             if forward:
                 all_statements.extend(
