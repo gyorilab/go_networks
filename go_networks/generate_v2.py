@@ -1,18 +1,21 @@
 """
 Generate GO Networks from a list of GO terms and the Sif dump.
 """
-from collections import defaultdict
 import logging
 import pickle
-import obonet
+from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
-from typing import Optional, Dict, Set, Tuple, Union
+from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
 
 import ndex2.client
-from ndex2 import create_nice_cx_from_server, NiceCXNetwork
-import networkx as nx
 import pandas as pd
+import pystow
+from indra.util.statement_presentation import reader_sources
+from indra_cogex.client.neo4j_client import Neo4jClient
+from indra_cogex.representation import Node
+from indra_db.client.principal.curation import get_curations
+from ndex2 import NiceCXNetwork, create_nice_cx_from_server
 from tqdm import tqdm
 
 from go_networks.util import (
@@ -21,13 +24,12 @@ from go_networks.util import (
     get_networks_in_set,
 )
 from go_networks.network_assembly import GoNetworkAssembler
-from indra_db.client.principal.curation import get_curations
-from indra.databases import uniprot_client, hgnc_client
-from indra.util.statement_presentation import reader_sources
+from go_networks.util import DIRECTED_TYPES, load_latest_sif
 
 from go_networks.util import get_ndex_web_client
 
 # Derived types
+Term = Tuple[str, str]
 PropAgg = Tuple[Dict[str, int], Dict[str, int], Dict[str, int]]
 PropDict = Dict[Tuple[str, str], PropAgg]
 Go2Genes = Dict[str, Set[str]]
@@ -35,7 +37,9 @@ EvCountDict = Dict[str, Dict[str, int]]
 NameEntityMap = Dict[str, Tuple[str, str]]
 
 # Constants
-HERE = Path(__file__).absolute().parent.parent.absolute().joinpath("old_networks")
+cache = pystow.module("go_networks")
+GO_MAPPINGS = cache.join(name="go_mappings.pkl")
+HERE = Path(__file__).absolute().parent.parent
 GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
 PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
@@ -111,7 +115,7 @@ def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
 
     else:
         sif_df = load_latest_sif()
-    assert isinstance(sif_df, pd.DataFrame)
+    assert isinstance(sif_df, pd.DataFrame), "Cached SIF is not a dataframe"
     return sif_df
 
 
@@ -288,57 +292,45 @@ def generate_props(
     return props_by_pair
 
 
-def genes_by_go_id():
-    """Load the gene/GO annotations as a pandas data frame."""
-    go_dag = obonet.read_obo(GO_OBO_PATH)
+def go_term_gene_query() -> Iterator[Tuple[List[Node], Node]]:
+    """Generator that yields pairs of gene names from the HGNC-only SIF dump.
 
-    goa = pd.read_csv(
-        GO_ANNOTS_PATH,
-        sep="\t",
-        comment="!",
-        dtype=str,
-        header=None,
-        names=[
-            "DB",
-            "DB_ID",
-            "DB_Symbol",
-            "Qualifier",
-            "GO_ID",
-            "DB_Reference",
-            "Evidence_Code",
-            "With_From",
-            "Aspect",
-            "DB_Object_Name",
-            "DB_Object_Synonym",
-            "DB_Object_Type",
-            "Taxon",
-            "Date",
-            "Assigned",
-            "Annotation_Extension",
-            "Gene_Product_Form_ID",
-        ],
+    Returns
+    -------
+    :
+        A generator of pairs of gene names
+    """
+    query = """MATCH (child_term:BioEntity)-[:isa*0..]->(term:BioEntity)<-[:associated_with]-(gene:BioEntity)
+               RETURN collect(child_term) as children, gene"""
+    client = Neo4jClient()
+    return (
+        ([client.neo4j_to_node(c) for c in r[0]], client.neo4j_to_node(r[1]))
+        for r in client.query_tx(query)
     )
-    # Filter out all "NOT" negative evidences
-    goa["Qualifier"].fillna("", inplace=True)
-    goa = goa[~goa["Qualifier"].str.startswith("NOT")]
-    # We can filter to just GO terms in the ontology since
-    # obsolete terms are not included in the GO DAG
-    goa = goa[goa["GO_ID"].isin(go_dag)]
 
-    genes_by_go_id = defaultdict(set)
-    for go_id, up_id in zip(goa.GO_ID, goa.DB_ID):
-        if go_dag.nodes[go_id]["namespace"] != "biological_process":
-            continue
-        hgnc_id = uniprot_client.get_hgnc_id(up_id)
-        if hgnc_id:
-            gene_name = hgnc_client.get_hgnc_name(hgnc_id)
-            genes_by_go_id[go_id] = genes_by_go_id[go_id] | {gene_name}
 
-    for go_id in set(genes_by_go_id):
-        for child_go_id in nx.ancestors(go_dag, go_id):
-            genes_by_go_id[go_id] |= genes_by_go_id[child_go_id]
+def genes_by_go_id() -> Dict[str, Set[str]]:
+    """Map go ids to gene symbols."""
+    # Get all go IDs from the database, unless they're cached
+    if GO_MAPPINGS.exists():
+        logger.info("Loading GO mapping from cache")
+        with GO_MAPPINGS.open(mode="rb") as fr:
+            return pickle.load(fr)
 
-    return genes_by_go_id
+    logger.info("Loading GO mapping from database")
+    genes_by_go = defaultdict(set)
+    for children, gene in tqdm(go_term_gene_query()):
+        for child in children:
+            genes_by_go[child.db_id].add(gene.data["name"])
+
+    genes_by_go = dict(genes_by_go)
+
+    # Save to cache
+    with GO_MAPPINGS.open(mode="wb") as fw:
+        logger.info("Caching GO mappings")
+        pickle.dump(obj=genes_by_go, file=fw)
+
+    return genes_by_go
 
 
 def build_networks(
