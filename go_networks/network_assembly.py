@@ -230,7 +230,7 @@ class GoNetworkAssembler:
             )
             # Add __relationship_score as attribute == ln(1+total_ev_count)
             self.network.add_edge_attribute(
-                edge_id, "__relationship_score", log(1 + total_ev_count), "double"
+                edge_id, "__relationship_score", 0.3 + log(total_ev_count), "double"
             )
 
             all_statements = []
