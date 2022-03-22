@@ -7,7 +7,7 @@ import pickle
 import obonet
 from itertools import combinations
 from pathlib import Path
-from typing import Optional, Dict, Set, Tuple
+from typing import Optional, Dict, Set, Tuple, Union
 
 import ndex2.client
 from ndex2 import create_nice_cx_from_server, NiceCXNetwork
@@ -47,11 +47,12 @@ logger = logging.getLogger(__name__)
 
 
 def get_curation_set() -> Set[int]:
-
     def _is_incorrect(stmt_hash, evid_hash):
         # Evidence is incorrect if it was only curated as incorrect
-        if evid_hash in correct_stmt_evid[stmt_hash]['incorrect'] and \
-                evid_hash not in correct_stmt_evid[stmt_hash]['correct']:
+        if (
+            evid_hash in correct_stmt_evid[stmt_hash]["incorrect"]
+            and evid_hash not in correct_stmt_evid[stmt_hash]["correct"]
+        ):
             return True
         return False
 
@@ -340,7 +341,7 @@ def genes_by_go_id():
 def build_networks(
     go2genes_map: Go2Genes,
     pair_props: PropDict,
-) -> Dict[str, GoNetworkAssembler]:
+) -> Dict[str, Dict[str, Union[NiceCXNetwork, float]]]:
     """Build networks per go-id associated genes
 
     Parameters
@@ -422,7 +423,7 @@ def generate(
     props_file: Optional[str] = None,
     apply_filters: bool = True,
     regenerate: bool = False,
-):
+) -> Dict[str, Dict[str, Union[NiceCXNetwork, float]]]:
     """Generate new GO networks from INDRA statements
 
     Parameters
@@ -541,9 +542,7 @@ def main(
             logger.info(f"Writing networks to {NETWORKS_FILE}")
             pickle.dump(networks, f)
 
-    style_ncx = create_nice_cx_from_server(
-        server=ndex_server_style, uuid=style_network
-    )
+    style_ncx = create_nice_cx_from_server(server=ndex_server_style, uuid=style_network)
 
     from indra.databases import ndex_client
 
