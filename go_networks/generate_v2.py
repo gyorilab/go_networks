@@ -482,6 +482,31 @@ def format_and_upload_network(
     return network_id
 
 
+def _update_style_network(style_ncx: NiceCXNetwork, min_score: float, max_score: float):
+    if NiceCXNetwork.CY_VISUAL_PROPERTIES in style_ncx.opaqueAspects:
+        vis_prop = NiceCXNetwork.CY_VISUAL_PROPERTIES
+        for style_dict in style_ncx.opaqueAspects[vis_prop]:
+            if style_dict["properties_of"] == "edges:default":
+                style_str = style_dict["mappings"]["EDGE_WIDTH"]["definition"]
+                styles = style_str.split(",")
+                min_ix = -1
+                max_ix = -1
+                for st in styles:
+                    if "OV=0=" in st:
+                        min_ix = styles.index(st)
+                    if "OV=1=" in st:
+                        max_ix = styles.index(st)
+                    if min_ix != -1 and max_ix != -1:
+                        break
+                styles[min_ix] = f"OV=0={min_score}"
+                styles[max_ix] = f"OV=1={max_score}"
+                style_dict["mappings"]["EDGE_WIDTH"]["definition"] = ",".join(styles)
+                break
+
+        assert f"OV=0={min_score}" in style_dict["mappings"]["EDGE_WIDTH"]["definition"]
+        assert f"OV=1={max_score}" in style_dict["mappings"]["EDGE_WIDTH"]["definition"]
+
+
 def main(
     network_set: str,
     style_network: str,
