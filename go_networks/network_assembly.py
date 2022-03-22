@@ -4,7 +4,7 @@ an Ndex network from a set of statements related to a given GO term.
 """
 import json
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 import networkx as nx
 from networkx.drawing import layout
@@ -165,6 +165,7 @@ class GoNetworkAssembler:
             "mechanistic interactions between genes/proteins that are "
             "associated with this GO process.",
         }
+        self.rel_scores = []
 
     def assemble(self):
         """Assemble cx network
@@ -233,8 +234,10 @@ class GoNetworkAssembler:
                 edge_id, "__evidence_count", total_ev_count, "integer"
             )
             # Add __relationship_score as attribute == ln(1+total_ev_count)
+            rel_score = 0.3 + log(total_ev_count)
+            self.rel_scores.append(rel_score)
             self.network.add_edge_attribute(
-                edge_id, "__relationship_score", 0.3 + log(total_ev_count), "double"
+                edge_id, "__relationship_score", rel_score, "double"
             )
 
             all_statements = []
