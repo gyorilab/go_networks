@@ -383,7 +383,11 @@ def build_networks(
             pair_properties=prop_dict,
         )
         gna.assemble()
-        networks[go_id] = gna.network
+        networks[go_id] = {
+            "network": gna.network,
+            "max_score": max(gna.rel_scores),
+            "min_score": min(gna.rel_scores),
+        }
 
     logger.info(f"Skipped {skipped} networks without statements")
     return networks
@@ -549,7 +553,14 @@ def main(
         "username": username,
         "password": password,
     }
-    for go_id, network in tqdm(sorted(networks.items(), key=lambda x: x[0])):
+    for go_id, network_dict in tqdm(sorted(networks.items(), key=lambda x: x[0])):
+        network = network_dict["network"]
+        min_score = network_dict["min_score"]
+        max_score = network_dict["max_score"]
+
+        # Update style network
+        _update_style_network(style_ncx, min_score=min_score, max_score=max_score)
+
         network_id = format_and_upload_network(
             network, network_set, style_ncx, **ndex_args
         )
