@@ -458,33 +458,35 @@ def generate(
 
 
 def format_and_upload_network(
-    ncx: NiceCXNetwork, network_set_id: str, style_ncx: NiceCXNetwork, **ndex_args
-):
+    ncx: NiceCXNetwork,
+    network_set_id: str,
+    style_ncx: NiceCXNetwork,
+    ndex_client: ndex2.client.Ndex2,
+) -> Tuple[str, bool]:
     """Take a NiceCXNetwork and upload it to NDEx."""
     # Fixme: NiceCXNetwork.apply_style_from_network() does not exist in
     #  ndex2==2.0.1 but ==2.0.1 is the requirement for INDRA
     #  This method was added in 3.1.0:
     #  https://github.com/ndexbio/ndex2-client/issues/43
     ncx.apply_style_from_network(style_ncx)
-    network_url = ncx.upload_to(**ndex_args)
+    network_url = ncx.upload_to(client=ndex_client)
     network_id = network_url.split("/")[-1]
-    nd = ndex2.client.Ndex2(
-        **{(k if k != "server" else "host"): v for k, v in ndex_args.items()}
-    )
+    failed = False
     try:
-        nd.make_network_public(network_id)
+        ndex_client.make_network_public(network_id)
     except Exception as e:
         logger.warning(f"Failed to make network {network_id} public: {e}")
+        failed = True
 
     try:
-        nd.add_networks_to_networkset(network_set_id, [network_id])
+        ndex_client.add_networks_to_networkset(network_set_id, [network_id])
     except Exception as e:
         logger.warning(
             f"Failed to add network {network_id} to network set "
             f"{network_set_id}: {e}"
         )
 
-    return network_id
+    return network_id, failed
 
 
 def _update_style_network(style_ncx: NiceCXNetwork, min_score: float, max_score: float):
@@ -552,6 +554,11 @@ def main(
         "username": username,
         "password": password,
     }
+    ndex_web_client = ndex2.client.Ndex2(
+        **{(k if k != "server" else "host"): v for k, v in ndex_args.items()}
+    )
+
+    failed_to_set_public = []
     for go_id, network_dict in tqdm(sorted(networks.items(), key=lambda x: x[0])):
         network = network_dict["network"]
         min_score = network_dict["min_score"]
@@ -560,8 +567,20 @@ def main(
         # Update style network
         _update_style_network(style_ncx, min_score=min_score, max_score=max_score)
 
-        network_id = format_and_upload_network(
-            network, network_set, style_ncx, **ndex_args
+        network_id, failed = format_and_upload_network(
+            network, network_set, style_ncx, ndex_client=ndex_web_client
         )
+        if failed:
+            failed_to_set_public.append(network_id)
+
         if TEST_GO_ID:
             print(f"Testing network uuid {network_id}")
+
+    if failed_to_set_public:
+        logger.warning(f"Failed to set {len(failed_to_set_public)} networks public")
+        # Retry to set public
+        for failed_uuid in failed_to_set_public:
+            try:
+                ndex_web_client.make_network_public(network_id=failed_uuid)
+            except Exception as e:
+                logger.warning(f"Failed to set network {failed_uuid} public again: {e}")
