@@ -6,7 +6,8 @@ import click
 
 
 TEST_SET = "d7acdc1d-a08f-11ec-b3be-0ac135e8bacf"
-PROD_SET = "4c2006cd-9fef-11ec-b3be-0ac135e8bacf"
+STYLE_NX = "4c2006cd-9fef-11ec-b3be-0ac135e8bacf"
+PROD_SET = "303190ca-aac0-11ec-b3be-0ac135e8bacf"
 
 
 @click.group("go-networks")
@@ -33,8 +34,8 @@ def main():
     type=str,
     # See style network at
     # https://www.ndexbio.org/viewer/networks/4c2006cd-9fef-11ec-b3be-0ac135e8bacf
-    default="4c2006cd-9fef-11ec-b3be-0ac135e8bacf",
-    help="Network ID of the style network",
+    default=STYLE_NX,
+    help=f"Network ID of the style network. Default: {STYLE_NX}",
 )
 @click.option(
     "--local-sif",
@@ -79,13 +80,13 @@ def test(
 @click.option(
     "--style-network",
     type=str,
-    default=PROD_SET,
-    help="Network ID of the style network",
+    default=STYLE_NX,
+    help=f"Network ID of the style network. Default: {STYLE_NX}",
 )
 @click.option(
     "--network-set",
-    help="Network set ID to add the new networks to.",
-    default="bdba6a7a-488a-11ec-b3be-0ac135e8bacf",
+    help=f"Network set ID to add the new networks to. Default: {PROD_SET}",
+    default=PROD_SET,
 )
 @click.option(
     "--local-sif",
