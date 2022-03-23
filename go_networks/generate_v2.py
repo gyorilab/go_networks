@@ -292,19 +292,19 @@ def generate_props(
     return props_by_pair
 
 
-def go_term_gene_query() -> Iterator[Tuple[List[Node], Node]]:
+def go_term_gene_query() -> Iterator[Tuple[Node, List[Node]]]:
     """Generator that yields pairs of gene names from the HGNC-only SIF dump.
 
     Returns
     -------
     :
-        A generator of pairs of gene names
+        An iterable of pairs of go term node with associated gene nodes
     """
-    query = """MATCH (child_term:BioEntity)-[:isa*0..]->(term:BioEntity)<-[:associated_with]-(gene:BioEntity)
-               RETURN collect(child_term) as children, gene"""
+    query = """MATCH (gene:BioEntity)-[:associated_with]->(:BioEntity)-[:isa*0..]->(term:BioEntity)
+               RETURN term, collect(gene)"""
     client = Neo4jClient()
     return (
-        ([client.neo4j_to_node(c) for c in r[0]], client.neo4j_to_node(r[1]))
+        (client.neo4j_to_node(r[0]), [client.neo4j_to_node(c) for c in r[1]])
         for r in client.query_tx(query)
     )
 
@@ -319,9 +319,8 @@ def genes_by_go_id() -> Dict[str, Set[str]]:
 
     logger.info("Loading GO mapping from database")
     genes_by_go = defaultdict(set)
-    for children, gene in tqdm(go_term_gene_query()):
-        for child in children:
-            genes_by_go[child.db_id].add(gene.data["name"])
+    for go_node, genes in tqdm(go_term_gene_query()):
+        genes_by_go[go_node.db_id] = {g.data['name'] for g in genes}
 
     genes_by_go = dict(genes_by_go)
 
