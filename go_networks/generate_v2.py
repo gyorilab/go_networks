@@ -6,6 +6,7 @@ import pickle
 from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
+from textwrap import dedent
 from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
 
 import ndex2.client
@@ -39,6 +40,8 @@ NameEntityMap = Dict[str, Tuple[str, str]]
 # Constants
 cache = pystow.module("go_networks")
 GO_MAPPINGS = cache.join(name="go_mappings.pkl")
+COGEX_SIF = cache.join(name="cogex_sif.pkl")
+
 HERE = Path(__file__).absolute().parent.parent
 GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
@@ -108,15 +111,79 @@ def get_curation_set() -> Set[int]:
     return hashes_out
 
 
-def get_sif(local_sif: Optional[str] = None) -> pd.DataFrame:
-    if local_sif and Path(local_sif).is_file():
-        with open(local_sif, "rb") as bf:
-            sif_df = pickle.load(file=bf)
+def get_sif_from_cogex() -> pd.DataFrame:
+    """Get the SIF from Cogex."""
+    query = dedent(
+        """
+    MATCH (gene1:BioEntity)-[r:indra_rel]-(gene2:BioEntity)
+    WHERE gene1 <> gene2 AND
+        gene1.id CONTAINS 'hgnc' AND
+        gene2.id CONTAINS 'hgnc'
+    RETURN gene1, gene2, r.belief, r.evidence_count, r.source_counts, r.stmt_hash, r.stmt_type
+    """
+    )
+    n4j_client = Neo4jClient()
+    logger.info("Getting interaction data from Cogex")
+    results = n4j_client.query_tx(query)
+    res_tuples = []
+    logger.info("Parsing SIF from Cogex")
+    for r in tqdm(results):
+        gene1 = n4j_client.neo4j_to_node(r[0])
+        gene2 = n4j_client.neo4j_to_node(r[1])
+        belief = r[2]
+        ev_count = r[3]
+        src_counts = r[4]
+        stmt_hash = r[5]
+        stmt_type = r[6]
+        res_tuples.append(
+            (
+                gene1.db_ns,
+                gene1.db_id,
+                gene1.data["name"],
+                gene2.db_ns,
+                gene2.db_id,
+                gene2.data["name"],
+                belief,
+                ev_count,
+                src_counts,
+                stmt_hash,
+                stmt_type,
+            )
+        )
+
+    logger.info("Converting to DataFrame")
+    df = pd.DataFrame(
+        res_tuples,
+        columns=[
+            "agA_ns",
+            "agA_id",
+            "agA_name",
+            "agB_ns",
+            "agB_id",
+            "agB_name",
+            "belief",
+            "evidence_count",
+            "source_counts",
+            "stmt_hash",
+            "stmt_type",
+        ],
+    )
+    logger.info("Setting data types")
+    df["belief"] = df["belief"].astype(pd.Float64Dtype())
+    df["evidence_count"] = df["evidence_count"].astype(pd.Int64Dtype())
+    df["stmt_hash"] = df["stmt_hash"].astype(pd.Int64Dtype())
+    return df
+
+
+def get_sif() -> pd.DataFrame:
+    if COGEX_SIF.exists():
+        with COGEX_SIF.open("rb") as bf:
+            cogex_sif = pickle.load(file=bf)
+        assert isinstance(cogex_sif, pd.DataFrame), "Cached SIF is not a dataframe"
 
     else:
-        sif_df = load_latest_sif()
-    assert isinstance(sif_df, pd.DataFrame), "Cached SIF is not a dataframe"
-    return sif_df
+        cogex_sif = get_sif_from_cogex()
+    return cogex_sif
 
 
 def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
@@ -320,7 +387,7 @@ def genes_by_go_id() -> Dict[str, Set[str]]:
     logger.info("Loading GO mapping from database")
     genes_by_go = defaultdict(set)
     for go_node, genes in tqdm(go_term_gene_query()):
-        genes_by_go[go_node.db_id] = {g.data['name'] for g in genes}
+        genes_by_go[go_node.db_id] = {g.data["name"] for g in genes}
 
     genes_by_go = dict(genes_by_go)
 
@@ -404,7 +471,7 @@ def filter_self_loops(df):
     return df[df.agA_name != df.agB_name]
 
 
-def filter_go_ids(go2genes_map):
+def filter_go_ids(go2genes_map) -> Dict[str, Set[str]]:
     return {
         go_id: genes
         for go_id, genes in go2genes_map.items()
