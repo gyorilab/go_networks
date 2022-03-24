@@ -578,6 +578,8 @@ def main(
 
     if failed_to_set_public:
         logger.warning(f"Failed to set {len(failed_to_set_public)} networks public")
+        logger.info("Retrying to set networks public...")
+
         # Retry to set public
         for failed_uuid in failed_to_set_public:
             try:
