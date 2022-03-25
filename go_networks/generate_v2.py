@@ -612,7 +612,6 @@ def main(
     network_set: str,
     style_network: str,
     regenerate: bool,
-    local_sif: Optional[str] = None,
     test_go_term: Optional[str] = None,
     ndex_server_style: str = DEFAULT_NDEX_SERVER,
 ):

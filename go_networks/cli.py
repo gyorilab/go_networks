@@ -39,12 +39,6 @@ def main():
     help=f"Network ID of the style network. Default: {STYLE_NX}",
 )
 @click.option(
-    "--local-sif",
-    type=str,
-    help="Path to a local SIF file. Only needed if we are regenerating the "
-    "properties file.",
-)
-@click.option(
     "--ndex-server-style",
     type=str,
     default="http://ndexbio.org",
@@ -55,14 +49,12 @@ def test(
     regenerate_props: bool,
     go_term: str,
     style_network: str,
-    local_sif: Optional[str] = None,
     ndex_server_style: str = "http://ndexbio.org",
 ):
     """Build a test network."""
     # Use the test network set:
     # d7acdc1d-a08f-11ec-b3be-0ac135e8bacf
     gen_networks(
-        local_sif=local_sif,
         network_set=TEST_SET,
         style_network=style_network,
         regenerate=regenerate_props,
@@ -89,20 +81,13 @@ def test(
     help=f"Network set ID to add the new networks to. Default: {PROD_SET}",
     default=PROD_SET,
 )
-@click.option(
-    "--local-sif",
-    type=str,
-    help="Path to a local SIF file to use instead of downloading from S3.",
-)
 def run(
     regenerate_props: bool,
     style_network: str,
     network_set: str,
-    local_sif: Optional[str] = None,
 ):
     """Run the go network generation."""
     gen_networks(
-        local_sif=local_sif,
         network_set=network_set,
         style_network=style_network,
         regenerate=regenerate_props,
