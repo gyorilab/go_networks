@@ -112,13 +112,36 @@ def get_curation_set() -> Set[int]:
 
 
 def get_sif_from_cogex() -> pd.DataFrame:
-    """Get the SIF from Cogex."""
+    """Get the SIF from Cogex
+
+    Conditions:
+        - No self loops, i.e. A != B
+        - Only HGNC nodes
+        - Skip relations where evidence_count == 1 AND source is a reader
+        - Skip relations where stmt_type == 'Complex' AND sparser is the only
+        source
+
+    Returns
+    -------
+    :
+        A pandas DataFrame with the SIF data
+    """
     query = dedent(
         """
     MATCH (gene1:BioEntity)-[r:indra_rel]-(gene2:BioEntity)
-    WHERE gene1 <> gene2 AND
+    WITH gene1, gene2, r, apoc.convert.fromJsonMap(r.source_counts) AS source_counts
+    WHERE
+        gene1 <> gene2 AND
         gene1.id CONTAINS 'hgnc' AND
-        gene2.id CONTAINS 'hgnc'
+        gene2.id CONTAINS 'hgnc' AND
+        NOT (r.stmt_type = 'Complex' AND keys(source_counts) = ['sparser']) AND
+        NOT (
+            r.evidence_count = 1 AND
+            NOT apoc.coll.intersection(
+                keys(source_counts),
+                ["biogrid", "hprd", "signor", "phosphoelm", "signor", "biopax"]
+            )
+        )
     RETURN gene1, gene2, r.belief, r.evidence_count, r.source_counts, r.stmt_hash, r.stmt_type
     """
     )
