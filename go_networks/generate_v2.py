@@ -111,7 +111,7 @@ def get_curation_set() -> Set[int]:
     return hashes_out
 
 
-def get_sif_from_cogex() -> pd.DataFrame:
+def get_sif_from_cogex(limit: Optional[int] = None) -> pd.DataFrame:
     """Get the SIF from Cogex
 
     Conditions:
@@ -120,6 +120,11 @@ def get_sif_from_cogex() -> pd.DataFrame:
         - Skip relations where evidence_count == 1 AND source is a reader
         - Skip relations where stmt_type == 'Complex' AND sparser is the only
         source
+
+    Parameters
+    ----------
+    limit :
+        Limit the number of edges to return. Useful for testing or debugging.
 
     Returns
     -------
@@ -145,6 +150,8 @@ def get_sif_from_cogex() -> pd.DataFrame:
     RETURN gene1, gene2, r.belief, r.evidence_count, r.source_counts, r.stmt_hash, r.stmt_type
     """
     )
+    if limit is not None and isinstance(limit, int):
+        query += f"LIMIT {limit}"
     n4j_client = Neo4jClient()
     logger.info("Getting interaction data from Cogex")
     results = n4j_client.query_tx(query)
