@@ -5,7 +5,6 @@ import logging
 import pickle
 from collections import defaultdict
 from itertools import combinations
-from pathlib import Path
 from textwrap import dedent
 from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
 
@@ -25,7 +24,7 @@ from go_networks.util import (
     get_networks_in_set,
 )
 from go_networks.network_assembly import GoNetworkAssembler
-from go_networks.util import DIRECTED_TYPES, load_latest_sif
+from go_networks.util import DIRECTED_TYPES
 
 from go_networks.util import get_ndex_web_client
 
@@ -42,11 +41,7 @@ cache = pystow.module("go_networks")
 GO_MAPPINGS = cache.join(name="go_mappings.pkl")
 COGEX_SIF = cache.join(name="cogex_sif.pkl")
 PROPS_FILE = cache.join(name="props.pkl")
-
-HERE = Path(__file__).absolute().parent.parent
-GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
-GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
-NETWORKS_FILE = HERE.joinpath("networks.pkl").absolute().as_posix()
+GO_NETWORKS = cache.join(name="networks.pkl")
 DEFAULT_NDEX_SERVER = "http://ndexbio.org"
 TEST_GO_ID = None
 
@@ -482,23 +477,11 @@ def filter_go_ids(go2genes_map) -> Dict[str, Set[str]]:
     }
 
 
-def generate(
-    sif_file: Optional[str] = None,
-    props_file: Optional[str] = None,
-    apply_filters: bool = True,
-    regenerate: bool = False,
-) -> Dict[str, Dict[str, Union[NiceCXNetwork, float]]]:
+def generate(regenerate: bool = False) -> Dict[str, Dict[str, Union[NiceCXNetwork, float]]]:
     """Generate new GO networks from INDRA statements
 
     Parameters
     ----------
-    sif_file :
-        If provided, load sif dump from this file. Default: load from S3.
-    props_file :
-        If provided, load property lookup from this file. Default: generate
-        from sif dump.
-    apply_filters :
-        If True, apply filters to the data before generating networks.
     regenerate :
         If True, regenerate the props from scratch and overwrite the existing
         props file, if it exists.
@@ -642,17 +625,12 @@ def main(
 
     logger.info(f"Using ndex server {ndex_server_style} for style")
 
-    networks = generate(
-        sif_file=local_sif,
-        props_file=PROPS_FILE,
-        apply_filters=True,
-        regenerate=regenerate,
-    )
+    networks = generate(regenerate=regenerate)
 
     # Only cache the networks if we're not testing
     if not test_go_term:
-        with open(NETWORKS_FILE, "wb") as f:
-            logger.info(f"Writing networks to {NETWORKS_FILE}")
+        with open(GO_NETWORKS, "wb") as f:
+            logger.info(f"Writing networks to {GO_NETWORKS}")
             pickle.dump(networks, f)
 
     style_ncx = create_nice_cx_from_server(server=ndex_server_style, uuid=style_network)
