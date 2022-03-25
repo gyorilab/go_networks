@@ -11,7 +11,6 @@ from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
 import ndex2.client
 import pandas as pd
 import pystow
-from indra.util.statement_presentation import reader_sources
 from indra_cogex.client.neo4j_client import Neo4jClient
 from indra_cogex.representation import Node
 from indra_db.client.principal.curation import get_curations
@@ -63,6 +62,8 @@ def get_curation_set() -> Set[int]:
 
     correct_tags = {"correct", "hypothesis", "act_vs_amt"}
 
+    # Download curations
+    logger.info("Getting curations from the database")
     try:
         curations = get_curations()
     except Exception as e:
@@ -192,6 +193,12 @@ def get_sif_from_cogex(limit: Optional[int] = None) -> pd.DataFrame:
     df["belief"] = df["belief"].astype(pd.Float64Dtype())
     df["evidence_count"] = df["evidence_count"].astype(pd.Int64Dtype())
     df["stmt_hash"] = df["stmt_hash"].astype(pd.Int64Dtype())
+
+    # Filter out curated incorrect statements
+    wrong_hashes = get_curation_set()
+    if wrong_hashes:
+        logger.info("Filtering out statements curated as incorrect")
+        df = df[~df.stmt_hash.isin(wrong_hashes)]
     return df
 
 
@@ -205,71 +212,6 @@ def get_sif(regenerate: bool = False) -> pd.DataFrame:
     else:
         cogex_sif = get_sif_from_cogex()
     return cogex_sif
-
-
-def filter_to_hgnc(sif: pd.DataFrame) -> pd.DataFrame:
-    """Filter sif dataframe to HGNC pairs only"""
-    return sif.query("agA_ns == 'HGNC' & agB_ns == 'HGNC'")
-
-
-def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
-    """Apply quality filters to the SIF dataframe
-
-    Filters applied:
-        - Remove all rows that are curated as incorrect
-        - Remove all rows with only one evidence that is from a reader
-        - Remove all rows where there is only one source, the source is
-          sparser and the stmt type is Complex
-
-    Parameters
-    ----------
-    sif_df : pd.DataFrame
-        The SIF dataframe
-
-    Returns
-    -------
-    pd.DataFrame
-        The filtered SIF dataframe
-    """
-    # Filter out curated incorrect statements
-    wrong_hashes = get_curation_set()
-    if wrong_hashes:
-        t = tqdm(desc="Quality filtering", total=3)
-        sif_df = sif_df[~sif_df.stmt_hash.isin(wrong_hashes)]
-        t.update()
-    else:
-        t = tqdm(desc="Quality filtering", total=2)
-
-    # Filter out statements with only one evidence from a reader source
-    reader_sources_set = set(reader_sources)
-    sif_df = sif_df[
-        ~(
-            (sif_df.evidence_count == 1)
-            & (
-                sif_df.source_counts.apply(
-                    lambda d: d is None
-                    or (len(d) == 1 and bool((set(d) & reader_sources_set)))
-                )
-            )
-        )
-    ]
-    t.update()
-
-    # Remove all rows where sparser is the only source and the stmt type is Complex
-    sif_df = sif_df[
-        ~(
-            (sif_df.stmt_type == "Complex")
-            & (
-                sif_df.source_counts.apply(
-                    lambda d: d is None or (set(d) == {"sparser"})
-                )
-            )
-        )
-    ]
-    t.update()
-    t.close()
-
-    return sif_df
 
 
 def generate_props(
