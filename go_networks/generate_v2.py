@@ -153,24 +153,19 @@ def get_sif_from_cogex() -> pd.DataFrame:
     for r in tqdm(results):
         gene1 = n4j_client.neo4j_to_node(r[0])
         gene2 = n4j_client.neo4j_to_node(r[1])
-        belief = r[2]
-        ev_count = r[3]
-        src_counts = r[4]
-        stmt_hash = r[5]
-        stmt_type = r[6]
         res_tuples.append(
             (
-                gene1.db_ns,
-                gene1.db_id,
-                gene1.data["name"],
-                gene2.db_ns,
-                gene2.db_id,
-                gene2.data["name"],
-                belief,
-                ev_count,
-                src_counts,
-                stmt_hash,
-                stmt_type,
+                gene1.db_ns,         # agA_ns
+                gene1.db_id,         # agA_id
+                gene1.data["name"],  # agA_name
+                gene2.db_ns,         # agB_ns
+                gene2.db_id,         # agB_id
+                gene2.data["name"],  # agB_name
+                r[2],                # belief
+                r[3],                # evidence_count
+                r[4],                # source_counts
+                r[5],                # stmt_hash
+                r[6],                # stmt_type
             )
         )
 
