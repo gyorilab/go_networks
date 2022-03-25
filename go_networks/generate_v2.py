@@ -41,11 +41,11 @@ NameEntityMap = Dict[str, Tuple[str, str]]
 cache = pystow.module("go_networks")
 GO_MAPPINGS = cache.join(name="go_mappings.pkl")
 COGEX_SIF = cache.join(name="cogex_sif.pkl")
+PROPS_FILE = cache.join(name="props.pkl")
 
 HERE = Path(__file__).absolute().parent.parent
 GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
-PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
 NETWORKS_FILE = HERE.joinpath("networks.pkl").absolute().as_posix()
 DEFAULT_NDEX_SERVER = "http://ndexbio.org"
 TEST_GO_ID = None
@@ -153,7 +153,7 @@ def get_sif_from_cogex(limit: Optional[int] = None) -> pd.DataFrame:
     if limit is not None and isinstance(limit, int):
         query += f"LIMIT {limit}"
     n4j_client = Neo4jClient()
-    logger.info("Getting interaction data from Cogex")
+    logger.info("Getting SIF interaction data from Cogex")
     results = n4j_client.query_tx(query)
     res_tuples = []
     logger.info("Parsing SIF from Cogex")
@@ -162,17 +162,17 @@ def get_sif_from_cogex(limit: Optional[int] = None) -> pd.DataFrame:
         gene2 = n4j_client.neo4j_to_node(r[1])
         res_tuples.append(
             (
-                gene1.db_ns,         # agA_ns
-                gene1.db_id,         # agA_id
+                gene1.db_ns,  # agA_ns
+                gene1.db_id,  # agA_id
                 gene1.data["name"],  # agA_name
-                gene2.db_ns,         # agB_ns
-                gene2.db_id,         # agB_id
+                gene2.db_ns,  # agB_ns
+                gene2.db_id,  # agB_id
                 gene2.data["name"],  # agB_name
-                r[2],                # belief
-                r[3],                # evidence_count
-                r[4],                # source_counts
-                r[5],                # stmt_hash
-                r[6],                # stmt_type
+                r[2],  # belief
+                r[3],  # evidence_count
+                r[4],  # source_counts
+                r[5],  # stmt_hash
+                r[6],  # stmt_type
             )
         )
 
@@ -200,8 +200,9 @@ def get_sif_from_cogex(limit: Optional[int] = None) -> pd.DataFrame:
     return df
 
 
-def get_sif() -> pd.DataFrame:
-    if COGEX_SIF.exists():
+def get_sif(regenerate: bool = False) -> pd.DataFrame:
+    if not regenerate and COGEX_SIF.exists():
+        logger.info("Loading SIF from cache")
         with COGEX_SIF.open("rb") as bf:
             cogex_sif = pickle.load(file=bf)
         assert isinstance(cogex_sif, pd.DataFrame), "Cached SIF is not a dataframe"
@@ -277,9 +278,6 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def generate_props(
-    sif_file: Optional[str] = None,
-    props_file: Optional[str] = None,
-    apply_filters: bool = True,
     regenerate: bool = False,
 ) -> PropDict:
     """Generate properties per pair from the Sif dump
@@ -295,15 +293,8 @@ def generate_props(
 
     Parameters
     ----------
-    sif_file :
-        The SIF dump file
-    props_file :
-        The file to cache the properties to
-    apply_filters :
-        Whether to apply quality filters to the SIF dataframe
     regenerate :
-        Whether to regenerate the props. If a props file path is provided,
-        the old props file will be overwritten.
+        Whether to regenerate the props. If True, the cache will be overwritten.
 
     Returns
     -------
@@ -311,26 +302,15 @@ def generate_props(
         The properties dictionary
     """
     # If the props file exists, load it, unless we want to regenerate
-    if not regenerate and props_file is not None and Path(props_file).is_file():
-        logger.info(f"Loading property lookup from {props_file}")
-        with Path(props_file).open(mode="rb") as fr:
+    if not regenerate and PROPS_FILE.exists():
+        logger.info(f"Loading property lookup from {PROPS_FILE}")
+        with PROPS_FILE.open(mode="rb") as fr:
             props_by_pair = pickle.load(fr)
     else:
         logger.info("Generating property lookup")
 
-        # Load the latest INDRA SIF dump
-        sif_df = get_sif(sif_file)
-
-        # Filter to HGNC-only rows
-        sif_df = filter_to_hgnc(sif_df)
-
-        # Filter out self-loops
-        sif_df = filter_self_loops(sif_df)
-
-        # Run filters if enabled
-        if apply_filters:
-            logger.info("Applying quality filters")
-            sif_df = quality_filter(sif_df)
+        # Load SIF
+        sif_df = get_sif(regenerate)
 
         hashes_by_pair = defaultdict(set)
         props_by_hash = {}
@@ -375,11 +355,9 @@ def generate_props(
             props_by_pair[pair] = aggregate_props([props_by_hash[h] for h in hashes])
 
         # Write to file if provided
-        if props_file:
-            Path(props_file).absolute().parent.mkdir(exist_ok=True, parents=True)
-            with Path(props_file).open(mode="wb") as fo:
-                logger.info(f"Saving property lookup to {props_file}")
-                pickle.dump(obj=props_by_pair, file=fo)
+        with PROPS_FILE.open(mode="wb") as fo:
+            logger.info(f"Saving property lookup to {PROPS_FILE}")
+            pickle.dump(obj=props_by_pair, file=fo)
 
     return props_by_pair
 
@@ -532,12 +510,7 @@ def generate(
     go2genes_map = filter_go_ids(go2genes_map)
 
     # Generate properties
-    sif_props = generate_props(
-        sif_file=sif_file,
-        props_file=props_file,
-        apply_filters=apply_filters,
-        regenerate=regenerate,
-    )
+    sif_props = generate_props(regenerate=regenerate)
 
     # Iterate by GO ID and for each list of genes, build a network
     return build_networks(go2genes_map, sif_props)
