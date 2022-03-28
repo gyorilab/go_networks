@@ -1,10 +1,13 @@
 import logging
 import pickle
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Optional
 
 import boto3
 import pandas as pd
+from ndex2 import Ndex2
+
+from indra.databases import ndex_client
 from indra.statements import *
 from indra_db.cli.dump import Sif, S3Path, get_latest_dump_s3_path
 
@@ -13,6 +16,9 @@ __all__ = [
     "stmts_by_directedness",
     "DIRECTED_TYPES",
     "UNDIRECTED_TYPES",
+    "NDEX_ARGS",
+    "get_ndex_web_client",
+    "get_networks_in_set",
 ]
 
 
@@ -70,6 +76,32 @@ def stmts_by_directedness(directed: bool) -> List[str]:
 # statement types by directedness
 DIRECTED_TYPES = stmts_by_directedness(True)
 UNDIRECTED_TYPES = stmts_by_directedness(False)
+
+
+NDEX_BASE_URL = "http://public.ndexbio.org"
+
+
+def _get_default_ndex_args() -> Dict[str, str]:
+    usr, pwd = ndex_client.get_default_ndex_cred(ndex_cred=None)
+    return {"username": usr, "password": pwd, "server": NDEX_BASE_URL}
+
+
+NDEX_ARGS = _get_default_ndex_args()
+
+
+def get_ndex_web_client() -> Ndex2:
+    return Ndex2(
+        **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
+    )
+
+
+def get_networks_in_set(network_set_id: str, client: Optional[Ndex2]) -> List[str]:
+    """Get the UUIDs of the networks in a network set."""
+    if client is None:
+        client = get_ndex_web_client()
+    network_set = client.get_networkset(network_set_id)
+    return network_set["networks"]
+
 
 # def set_directed(sif_df: pd.DataFrame):
 #     """Extend dataframe with column "directed" indicting directedness

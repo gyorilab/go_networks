@@ -27,7 +27,7 @@ from matplotlib import pyplot as plt
 from matplotlib_venn import venn2
 from tqdm import tqdm
 
-from indra.databases import ndex_client
+from go_networks.util import get_ndex_web_client, NDEX_ARGS
 from indra.statements import Statement
 from indra.statements.agent import default_ns_order
 from indra.ontology.bio import bio_ontology
@@ -43,7 +43,6 @@ logger = logging.getLogger(__name__)
 
 
 NDEX_BASE_URL_V2 = "http://public.ndexbio.org/v2"
-NDEX_BASE_URL = "http://public.ndexbio.org"
 NETWORK_ENDPOINT = f"{NDEX_BASE_URL_V2}/network"
 NETWORKSET_ENDPOINT = f"{NDEX_BASE_URL_V2}/networkset"
 NCIPID_SET = "8a2d7ee9-1513-11e9-bb6a-0ac135e8bacf"
@@ -51,13 +50,6 @@ NDEX_FTP_BASE = (
     "ftp://ftp.ndexbio.org/NCI_PID_BIOPAX_2016-06-08-PC2v8-API/{pathway_name}.owl.gz"
 )
 
-
-def _get_default_ndex_args() -> Dict[str, str]:
-    usr, pwd = ndex_client.get_default_ndex_cred(ndex_cred=None)
-    return {"username": usr, "password": pwd, "server": NDEX_BASE_URL}
-
-
-NDEX_ARGS = _get_default_ndex_args()
 
 proteins = ['FPLX', 'UPPRO', 'HGNC', 'UP']
 small_molecules = ['CHEBI', 'CHEMBL', 'PUBCHEM']
@@ -107,16 +99,6 @@ def _ndex_ftp_owl_url(pathway_name: str) -> str:
     return NDEX_FTP_BASE.format(pathway_name=url_encoded)
 
 
-def _get_networks_in_set(network_set_id: str, client: Optional[Ndex2]) -> List[str]:
-    """Get the UUIDs of the networks in a network set."""
-    if client is None:
-        client = Ndex2(
-            **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
-        )
-    network_set = client.get_networkset(network_set_id)
-    return network_set["networks"]
-
-
 def _get_ndex_graph_info(network_id: str, client: Optional[Ndex2]) -> Tuple[str, str]:
     """Get name and ftp url for a network
 
@@ -133,9 +115,7 @@ def _get_ndex_graph_info(network_id: str, client: Optional[Ndex2]) -> Tuple[str,
         Tuple of name and ftp url
     """
     if client is None:
-        client = Ndex2(
-            **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
-        )
+        client = get_ndex_web_client()
 
     info_dict = client.get_network_summary(network_id)
     link_tag = None
