@@ -7,7 +7,8 @@ import click
 
 TEST_SET = "d7acdc1d-a08f-11ec-b3be-0ac135e8bacf"
 STYLE_NX = "4c2006cd-9fef-11ec-b3be-0ac135e8bacf"
-PROD_SET = "303190ca-aac0-11ec-b3be-0ac135e8bacf"
+PROD_SET = "bdba6a7a-488a-11ec-b3be-0ac135e8bacf"
+SECONDARY_SET = "303190ca-aac0-11ec-b3be-0ac135e8bacf"
 
 
 @click.group("go-networks")
