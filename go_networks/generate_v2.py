@@ -513,7 +513,7 @@ def format_and_update_network(
     # If we have a UUID, update the network
     if cx_uuid:
         try:
-            ndex_client.update_cx_network(cx_stream=ncx, network_id=cx_uuid)
+            ndex_client.update_cx_network(cx_stream=ncx.to_cx_stream(), network_id=cx_uuid)
         except Exception as e:
             logger.warning(f"Failed to update network {cx_uuid}: {e}")
             failed_update = True
