@@ -473,10 +473,14 @@ def get_go_uuid_mapping(set_uuid: str) -> Dict[str, str]:
     :
         A dict mapping GO IDs to UUIDs of networks
     """
+    logger.info(f"Getting GO IDs for {set_uuid}")
+
     # Loop the networks in the set and get the go id for each network
     ndex_web_client = get_ndex_web_client()
     uuid_set = get_networks_in_set(network_set_id=set_uuid, client=ndex_web_client)
     go_uuid_mapping = {}
+
+    logger.info("Getting GO ID-uuid mapping")
     for cx_uuid in tqdm(uuid_set):
         # Get the info for the network
         network_info = ndex_web_client.get_network_summary(cx_uuid)
@@ -603,6 +607,7 @@ def main(
 
     failed_to_set_public = []
     failed_to_update = []
+    logger.info("Uploading networks to NDEx")
     for go_id, network_dict in tqdm(sorted(networks.items(), key=lambda x: x[0])):
         network = network_dict["network"]
         min_score = network_dict["min_score"]
