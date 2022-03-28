@@ -35,7 +35,7 @@ EvCountDict = Dict[str, Dict[str, int]]
 NameEntityMap = Dict[str, Tuple[str, str]]
 
 # Constants
-HERE = Path(__file__).absolute().parent.parent
+HERE = Path(__file__).absolute().parent.parent.absolute().joinpath("old_networks")
 GO_ANNOTS_PATH = HERE.joinpath("goa_human.gaf").absolute().as_posix()
 GO_OBO_PATH = HERE.joinpath("go.obo").absolute().as_posix()
 PROPS_FILE = HERE.joinpath("props.pkl").absolute().as_posix()
