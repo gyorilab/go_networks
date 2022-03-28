@@ -460,7 +460,42 @@ def generate(
     return build_networks(go2genes_map, sif_props)
 
 
-def format_and_upload_network(
+def get_go_uuid_mapping(set_uuid: str) -> Dict[str, str]:
+    """Get mapping of GO IDs to UUID from NDEx
+
+    Parameters
+    ----------
+    set_uuid :
+        The UUID of the GO set
+
+    Returns
+    -------
+    :
+        A dict mapping GO IDs to UUIDs of networks
+    """
+    # Loop the networks in the set and get the go id for each network
+    ndex_web_client = get_ndex_web_client()
+    uuid_set = get_networks_in_set(network_set_id=set_uuid, client=ndex_web_client)
+    go_uuid_mapping = {}
+    for cx_uuid in tqdm(uuid_set):
+        # Get the info for the network
+        network_info = ndex_web_client.get_network_summary(cx_uuid)
+
+        # Get the go id
+        go_id = None
+        for prop_dict in network_info["properties"]:
+            if prop_dict["predicateString"] == "GO ID":
+                go_id = prop_dict["value"]
+                go_uuid_mapping[go_id] = cx_uuid
+                break
+            else:
+                continue
+        if go_id is None:
+            logger.warning(f"No GO ID found for network {cx_uuid}")
+    return go_uuid_mapping
+
+
+def format_and_update_network(
     ncx: NiceCXNetwork,
     network_set_id: str,
     style_ncx: NiceCXNetwork,
@@ -562,17 +597,9 @@ def main(
 
     style_ncx = create_nice_cx_from_server(server=ndex_server_style, uuid=style_network)
 
-    from indra.databases import ndex_client
+    ndex_web_client = get_ndex_web_client()
 
-    username, password = ndex_client.get_default_ndex_cred(ndex_cred=None)
-    ndex_args = {
-        "server": "http://public.ndexbio.org",
-        "username": username,
-        "password": password,
-    }
-    ndex_web_client = ndex2.client.Ndex2(
-        **{(k if k != "server" else "host"): v for k, v in ndex_args.items()}
-    )
+    go_uuid_mapping = get_go_uuid_mapping(network_set)
 
     failed_to_set_public = []
     failed_to_update = []
