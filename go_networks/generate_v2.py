@@ -613,6 +613,8 @@ def main(
 
         # Get uuid for GO term
         go_uuid = go_uuid_mapping.get(go_id)
+
+        # Update/upload network
         network_id, failed = format_and_update_network(
             ncx=network,
             network_set_id=network_set,
@@ -638,3 +640,6 @@ def main(
                 ndex_web_client.make_network_public(network_id=failed_uuid)
             except Exception as e:
                 logger.warning(f"Failed to set network {failed_uuid} public again: {e}")
+
+    if failed_to_update:
+        logger.warning(f"Failed to update {len(failed_to_update)} networks")
