@@ -18,11 +18,14 @@ from tqdm import tqdm
 from go_networks.util import (
     DIRECTED_TYPES,
     load_latest_sif,
+    get_networks_in_set,
 )
 from go_networks.network_assembly import GoNetworkAssembler
 from indra_db.client.principal.curation import get_curations
 from indra.databases import uniprot_client, hgnc_client
 from indra.util.statement_presentation import reader_sources
+
+from go_networks.util import get_ndex_web_client
 
 # Derived types
 PropAgg = Tuple[Dict[str, int], Dict[str, int], Dict[str, int]]
@@ -462,31 +465,44 @@ def format_and_upload_network(
     network_set_id: str,
     style_ncx: NiceCXNetwork,
     ndex_client: ndex2.client.Ndex2,
-) -> Tuple[str, bool]:
+    cx_uuid: Optional[str] = None,
+) -> Tuple[str, Dict[str, bool]]:
     """Take a NiceCXNetwork and upload it to NDEx."""
     # Fixme: NiceCXNetwork.apply_style_from_network() does not exist in
     #  ndex2==2.0.1 but ==2.0.1 is the requirement for INDRA
     #  This method was added in 3.1.0:
     #  https://github.com/ndexbio/ndex2-client/issues/43
     ncx.apply_style_from_network(style_ncx)
-    network_url = ncx.upload_to(client=ndex_client)
-    network_id = network_url.split("/")[-1]
-    failed = False
-    try:
-        ndex_client.make_network_public(network_id)
-    except Exception as e:
-        logger.warning(f"Failed to make network {network_id} public: {e}")
-        failed = True
+    failed_public = False
+    failed_update = False
+    # If we have a UUID, update the network
+    if cx_uuid:
+        try:
+            ndex_client.update_cx_network(cx_stream=ncx, network_id=cx_uuid)
+        except Exception as e:
+            logger.warning(f"Failed to update network {cx_uuid}: {e}")
+            failed_update = True
+        finally:
+            network_id = cx_uuid
+    # If there is no UUID, create a new network
+    else:
+        network_url = ncx.upload_to(client=ndex_client)
+        network_id = network_url.split("/")[-1]
+        try:
+            ndex_client.make_network_public(network_id)
+        except Exception as e:
+            logger.warning(f"Failed to make network {network_id} public: {e}")
+            failed_public = True
 
-    try:
-        ndex_client.add_networks_to_networkset(network_set_id, [network_id])
-    except Exception as e:
-        logger.warning(
-            f"Failed to add network {network_id} to network set "
-            f"{network_set_id}: {e}"
-        )
+        try:
+            ndex_client.add_networks_to_networkset(network_set_id, [network_id])
+        except Exception as e:
+            logger.warning(
+                f"Failed to add network {network_id} to network set "
+                f"{network_set_id}: {e}"
+            )
 
-    return network_id, failed
+    return network_id, {"public": failed_public, "update": failed_update}
 
 
 def _update_style_network(style_ncx: NiceCXNetwork, min_score: float, max_score: float):
@@ -559,6 +575,7 @@ def main(
     )
 
     failed_to_set_public = []
+    failed_to_update = []
     for go_id, network_dict in tqdm(sorted(networks.items(), key=lambda x: x[0])):
         network = network_dict["network"]
         min_score = network_dict["min_score"]
@@ -567,11 +584,19 @@ def main(
         # Update style network
         _update_style_network(style_ncx, min_score=min_score, max_score=max_score)
 
-        network_id, failed = format_and_upload_network(
-            network, network_set, style_ncx, ndex_client=ndex_web_client
+        # Get uuid for GO term
+        go_uuid = go_uuid_mapping.get(go_id)
+        network_id, failed = format_and_update_network(
+            ncx=network,
+            network_set_id=network_set,
+            style_ncx=style_ncx,
+            ndex_client=ndex_web_client,
+            cx_uuid=go_uuid,
         )
-        if failed:
+        if failed["public"]:
             failed_to_set_public.append(network_id)
+        if failed["update"]:
+            failed_to_update.append(network_id)
 
         if TEST_GO_ID:
             print(f"Testing network uuid {network_id}")
