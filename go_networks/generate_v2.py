@@ -431,7 +431,9 @@ def filter_go_ids(go2genes_map) -> Dict[str, Set[str]]:
     }
 
 
-def generate(regenerate: bool = False) -> Dict[str, Dict[str, Union[NiceCXNetwork, float]]]:
+def generate(
+    regenerate: bool = False,
+) -> Dict[str, Dict[str, Union[NiceCXNetwork, float]]]:
     """Generate new GO networks from INDRA statements
 
     Parameters
@@ -510,7 +512,9 @@ def format_and_update_network(
     # If we have a UUID, update the network
     if cx_uuid:
         try:
-            ndex_client.update_cx_network(cx_stream=ncx.to_cx_stream(), network_id=cx_uuid)
+            ndex_client.update_cx_network(
+                cx_stream=ncx.to_cx_stream(), network_id=cx_uuid
+            )
         except Exception as e:
             logger.warning(f"Failed to update network {cx_uuid}: {e}")
             failed_update = True
