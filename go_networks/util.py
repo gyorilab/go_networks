@@ -2,8 +2,6 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Optional
 
-import boto3
-import pandas as pd
 from ndex2 import Ndex2
 
 from indra.databases import ndex_client
@@ -75,12 +73,12 @@ NDEX_ARGS = _get_default_ndex_args()
 
 
 def get_ndex_web_client() -> Ndex2:
-    return Ndex2(
-        **{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()}
-    )
+    return Ndex2(**{(k if k != "server" else "host"): v for k, v in NDEX_ARGS.items()})
 
 
-def get_networks_in_set(network_set_id: str, client: Optional[Ndex2]) -> List[str]:
+def get_networks_in_set(
+    network_set_id: str, client: Optional[Ndex2] = None
+) -> List[str]:
     """Get the UUIDs of the networks in a network set."""
     if client is None:
         client = get_ndex_web_client()

@@ -6,7 +6,7 @@ import pickle
 from collections import defaultdict
 from itertools import combinations
 from textwrap import dedent
-from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import Dict, Iterator, Optional, Set, Tuple, Union
 
 import ndex2.client
 import pandas as pd
@@ -600,7 +600,7 @@ def main(
 
     # Only cache the networks if we're not testing
     if not test_go_term:
-        with open(GO_NETWORKS, "wb") as f:
+        with GO_NETWORKS.open("wb") as f:
             logger.info(f"Writing networks to {GO_NETWORKS}")
             pickle.dump(networks, f)
     else:
