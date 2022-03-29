@@ -107,14 +107,14 @@ def get_curation_set() -> Set[int]:
 
 
 def get_sif_from_cogex(limit: Optional[int] = None) -> pd.DataFrame:
-    """Get the SIF from Cogex
+    """Get the SIF from the database
 
     Conditions:
         - No self loops, i.e. A != B
         - Only HGNC nodes
         - Skip relations where evidence_count == 1 AND source is a reader
         - Skip relations where stmt_type == 'Complex' AND sparser is the only
-        source
+          source
 
     Parameters
     ----------
@@ -148,10 +148,10 @@ def get_sif_from_cogex(limit: Optional[int] = None) -> pd.DataFrame:
     if limit is not None and isinstance(limit, int):
         query += f"LIMIT {limit}"
     n4j_client = Neo4jClient()
-    logger.info("Getting SIF interaction data from Cogex")
+    logger.info("Getting SIF interaction data from database")
     results = n4j_client.query_tx(query)
     res_tuples = []
-    logger.info("Parsing SIF from Cogex")
+    logger.info("Generating SIF from database results")
     for r in tqdm(results):
         gene1 = n4j_client.neo4j_to_node(r[0])
         gene2 = n4j_client.neo4j_to_node(r[1])
@@ -262,7 +262,9 @@ def generate_props(
             else:
                 return "undirected"
 
-        for _, row in tqdm(sif_df.iterrows(), total=len(sif_df)):
+        # For each pair of genes, generate the properties
+        logger.info("Generating properties by hash")
+        for _, row in tqdm(sif_df.iterrows(), total=sif_df.shape[0]):
             pair = tuple(sorted([row.agA_name, row.agB_name]))
             hashes_by_pair[pair].add(row.stmt_hash)
             if row.stmt_hash not in props_by_hash:
@@ -287,7 +289,8 @@ def generate_props(
             return dict(ev_forward), dict(ev_reverse), dict(ev_undirected)
 
         props_by_pair = {}
-        for pair, hashes in hashes_by_pair.items():
+        logger.info("Aggregating properties by pair")
+        for pair, hashes in tqdm(hashes_by_pair.items()):
             props_by_pair[pair] = aggregate_props([props_by_hash[h] for h in hashes])
 
         # Write to file if provided
@@ -437,7 +440,7 @@ def filter_self_loops(df):
 def filter_go_ids(go2genes_map) -> Dict[str, Set[str]]:
     return {
         go_id: genes
-        for go_id, genes in go2genes_map.items()
+        for go_id, genes in tqdm(go2genes_map.items(), desc="Filtering GO IDs")
         if min_gene_count <= len(genes) <= max_gene_count
     }
 
@@ -600,6 +603,8 @@ def main(
         with open(GO_NETWORKS, "wb") as f:
             logger.info(f"Writing networks to {GO_NETWORKS}")
             pickle.dump(networks, f)
+    else:
+        logger.info("TEST: Not caching networks")
 
     style_ncx = create_nice_cx_from_server(server=ndex_server_style, uuid=style_network)
 
