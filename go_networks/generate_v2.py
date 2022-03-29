@@ -11,6 +11,7 @@ from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
 import ndex2.client
 import pandas as pd
 import pystow
+from indra.ontology.bio import bio_ontology
 from indra_cogex.client.neo4j_client import Neo4jClient
 from indra_cogex.representation import Node
 from indra_db.client.principal.curation import get_curations
@@ -297,19 +298,20 @@ def generate_props(
     return props_by_pair
 
 
-def go_term_gene_query() -> Iterator[Tuple[Node, List[Node]]]:
-    """Generator that yields pairs of gene names from the HGNC-only SIF dump.
+def go_term_gene_query() -> Iterator[Tuple[Node, Node]]:
+    """An Iterator of go-term gene pairs
 
     Returns
     -------
     :
-        An iterable of pairs of go term node with associated gene nodes
+        An iterable of pairs of go term node with associated gene node
     """
-    query = """MATCH (gene:BioEntity)-[:associated_with]->(:BioEntity)-[:isa*0..]->(term:BioEntity)
-               RETURN term, collect(gene)"""
+    query = (
+        "MATCH (gene:BioEntity)-[:associated_with]->(term:BioEntity) RETURN term, gene"
+    )
     client = Neo4jClient()
     return (
-        (client.neo4j_to_node(r[0]), [client.neo4j_to_node(c) for c in r[1]])
+        (client.neo4j_to_node(r[0]), client.neo4j_to_node(r[1]))
         for r in client.query_tx(query)
     )
 
@@ -323,10 +325,22 @@ def genes_by_go_id() -> Dict[str, Set[str]]:
             return pickle.load(fr)
 
     logger.info("Loading GO mapping from database")
-    genes_by_go = defaultdict(set)
-    for go_node, genes in tqdm(go_term_gene_query()):
-        genes_by_go[go_node.db_id] = {g.data["name"] for g in genes}
 
+    # Set initial mapping
+    genes_by_go = defaultdict(set)
+    for go_node, gene in tqdm(go_term_gene_query(), desc="Loading from database"):
+        genes_by_go[go_node.db_id].add(gene.data["name"])
+
+    # Load bio ontology
+    logger.info("Adding genes of child terms to the parent terms")
+    bio_ontology.initialize()
+
+    # For each term, add the genes associated with its children as well
+    for go_id in tqdm(set(genes_by_go.keys()), desc="Adding genes of child terms"):
+        for go_child in bio_ontology.get_children("GO", go_id):
+            genes_by_go[go_id] |= genes_by_go[go_child]
+
+    # Reset defaultdict to dict
     genes_by_go = dict(genes_by_go)
 
     # Save to cache
