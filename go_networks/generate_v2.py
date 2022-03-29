@@ -316,10 +316,21 @@ def go_term_gene_query() -> Iterator[Tuple[Node, Node]]:
     )
 
 
-def genes_by_go_id() -> Dict[str, Set[str]]:
-    """Map go ids to gene symbols."""
+def genes_by_go_id(regenerate: bool = False) -> Dict[str, Set[str]]:
+    """Map go ids to gene symbols
+
+    Parameters
+    ----------
+    regenerate :
+        Whether to regenerate the cache. If True, the cache will be overwritten.
+
+    Returns
+    -------
+    :
+        A dictionary mapping go ids to sets of gene symbols
+    """
     # Get all go IDs from the database, unless they're cached
-    if GO_MAPPINGS.exists():
+    if GO_MAPPINGS.exists() and not regenerate:
         logger.info("Loading GO mapping from cache")
         with GO_MAPPINGS.open(mode="rb") as fr:
             return pickle.load(fr)
@@ -443,7 +454,7 @@ def generate(
         props file, if it exists.
     """
     # Make genes by GO ID dict
-    go2genes_map = genes_by_go_id()
+    go2genes_map = genes_by_go_id(regenerate=regenerate)
 
     # Filter GO IDs
     go2genes_map = filter_go_ids(go2genes_map)
