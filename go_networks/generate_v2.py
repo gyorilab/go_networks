@@ -19,13 +19,11 @@ from tqdm import tqdm
 
 from go_networks.util import (
     DIRECTED_TYPES,
-    load_latest_sif,
+    get_ndex_web_client,
     get_networks_in_set,
 )
 from go_networks.network_assembly import GoNetworkAssembler
-from go_networks.util import DIRECTED_TYPES
 
-from go_networks.util import get_ndex_web_client
 
 # Derived types
 Term = Tuple[str, str]
