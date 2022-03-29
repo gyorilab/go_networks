@@ -163,7 +163,7 @@ def quality_filter(sif_df: pd.DataFrame) -> pd.DataFrame:
     ]
     t.update()
 
-    # Remove all rows where the source is sparser and the stmt type is Complex
+    # Remove all rows where sparser is the only source and the stmt type is Complex
     sif_df = sif_df[
         ~(
             (sif_df.stmt_type == "Complex")
@@ -350,7 +350,7 @@ def build_networks(
     Parameters
     ----------
     go2genes_map :
-        A dict mapping GO IDs to lists of genes
+        A dict mapping GO ID to a list of genes
     pair_props :
         Lookup for edges
 
