@@ -24,7 +24,7 @@ from go_networks.util import (
     get_networks_in_set,
     NDEX_ARGS,
 )
-from go_networks.network_assembly import GoNetworkAssembler, _get_cx_layout
+from go_networks.network_assembly import GoNetworkAssembler, get_cx_layout
 
 
 # Derived types
@@ -565,7 +565,7 @@ def update_coordinates_for_network(
     ncx: NiceCXNetwork = create_nice_cx_from_server(uuid=ncx_uuid, **NDEX_ARGS)
 
     # Get the coordinates
-    node_layout_by_name = _get_cx_layout(network=ncx)
+    node_layout_by_name = get_cx_layout(network=ncx)
 
     # Update the coordinates in the network
     node_name_id = {(nd['n'], _id) for _id, nd in ncx.nodes.items()}

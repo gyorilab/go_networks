@@ -171,9 +171,13 @@ def _untangle_layout(g: nx.Graph, pos: NodeCoords):
                       x_mm=(x_min, x_max), y_mm=(y_min, y_max))
 
 
-def _get_cx_layout(
+def get_cx_layout(
     network: NiceCXNetwork, scale_factor: float = 500, untangle: bool = True
 ) -> Dict:
+    """Get a NiceCXNetwork compatible set of coordinates for the nodes
+
+    Returns a dict of coordinates keyed by the node
+    """
     # Convert to networkx graph
     g = network.to_networkx()
 
