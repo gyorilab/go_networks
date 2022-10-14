@@ -1,6 +1,4 @@
-from typing import Optional
-
-from generate_v2 import main as gen_networks
+from go_networks.generate_v2 import main as gen_networks
 
 import click
 
