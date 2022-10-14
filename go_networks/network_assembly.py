@@ -119,18 +119,18 @@ def _move_nodes_apart(
     distances = {(n1, n2): dist(pos[n1], pos[n2]) for n1, n2 in node_pairs}
 
     # Loop the pairs and update the position if it's too close
+    radius = 2*min_dist
     for n1, n2 in node_pairs:
         if distances[(n1, n2)] < min_dist:
             # Move n1 to a random position a radius == min_dist away from n2
-            xy1_new = _get_position_on_circle(pos[n2], min_dist)
-            new_min = min_dist
+            xy1_new = _get_position_on_circle(pos[n2], radius)
 
             # While the new position is still within the min-max of all
             # coordinates and there still is overlap, try a new distance and
             # angle
-            while _is_within(xy1_new) and _is_too_close(xy1_new, pos, new_min):
-                new_min += 0.5*min_dist
-                xy1_new = _get_position_on_circle(pos[n2], new_min)
+            while _is_within(xy1_new) and _is_too_close(xy1_new, pos, radius):
+                radius += 0.5*min_dist
+                xy1_new = _get_position_on_circle(pos[n2], radius)
 
             # Replace the current position of n1
             pos[n1] = list(xy1_new)
