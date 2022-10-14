@@ -24,7 +24,7 @@ from go_networks.util import (
     get_networks_in_set,
     NDEX_ARGS,
 )
-from go_networks.network_assembly import GoNetworkAssembler
+from go_networks.network_assembly import GoNetworkAssembler, _get_cx_layout
 
 
 # Derived types
@@ -554,6 +554,30 @@ def get_go_uuid_mapping(set_uuid: str) -> Dict[str, str]:
         if go_id is None:
             logger.warning(f"No GO ID found for network {cx_uuid}")
     return go_uuid_mapping
+
+
+def update_coordinates_for_network(
+    ncx_uuid: str,
+    ndex_client: ndex2.client.Ndex2
+):
+    """Given an ncx uuid update the coordinates of the nodes in the graph"""
+    # Get the NiceCXNetwork
+    ncx: NiceCXNetwork = create_nice_cx_from_server(uuid=ncx_uuid, **NDEX_ARGS)
+
+    # Get the coordinates
+    node_layout_by_name = _get_cx_layout(network=ncx)
+
+    # Update the coordinates in the network
+    node_name_id = {(nd['n'], _id) for _id, nd in ncx.nodes.items()}
+    layout_aspect = []
+    for hgnc_symb, node_id in node_name_id:
+        x, y = node_layout_by_name[hgnc_symb]
+        layout_aspect.append({"node": node_id, "x": x, "y": y})
+    ncx.set_opaque_aspect("cartesianLayout", layout_aspect)
+
+    # Update the network
+    ndex_client.update_cx_network(cx_stream=ncx.to_cx_stream(),
+                                  network_id=ncx_uuid)
 
 
 def format_and_update_network(
