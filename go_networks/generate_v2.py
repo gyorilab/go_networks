@@ -22,6 +22,7 @@ from go_networks.util import (
     DIRECTED_TYPES,
     get_ndex_web_client,
     get_networks_in_set,
+    NDEX_ARGS,
 )
 from go_networks.network_assembly import GoNetworkAssembler
 
@@ -467,6 +468,44 @@ def generate(
 
     # Iterate by GO ID and for each list of genes, build a network
     return build_networks(go2genes_map, sif_props)
+
+
+def download_ncx_from_uuids(ncx_uuids):
+    # Download the set of NiceCXnetworks given by the UUIDS
+    res = {}
+    for ncx_uuid in tqdm(ncx_uuids, desc="Downloading NCX"):
+        ncx = create_nice_cx_from_server(uuid=ncx_uuid, **NDEX_ARGS)
+        res[ncx_uuid] = ncx
+
+    return res
+
+
+def get_ncx_cache_from_set(ncx_set_uuid: str):
+    ncx_cache = {}
+    ndex_web_client = get_ndex_web_client()
+    ncx_uuids = get_networks_in_set(ncx_set_uuid, client=ndex_web_client)
+    for ncx_uuid in tqdm(ncx_uuids,
+                         desc=f"Downloading NCX from set {ncx_set_uuid}"):
+        ncx = create_nice_cx_from_server(uuid=ncx_uuid, **NDEX_ARGS)
+
+        # network_info = ndex_web_client.get_network_summary(ncx_uuid)
+
+        # Get the go id
+        # go_id = None
+        # for prop_dict in network_info["properties"]:
+        #     if prop_dict["predicateString"] == "GO ID":
+        #         go_id = prop_dict["value"]
+        #         break
+        #     else:
+        #         continue
+        # if go_id is None:
+        #     logger.warning(f"No GO ID found for network {ncx_uuid}")
+        #     continue
+
+        # ncx_cache[go_id] = {"uuid": ncx_uuid, "ncx": ncx}
+        ncx_cache[ncx_uuid] = ncx
+
+    return ncx_cache
 
 
 def get_go_uuid_mapping(set_uuid: str) -> Dict[str, str]:
