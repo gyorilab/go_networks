@@ -662,7 +662,7 @@ def main(
 
     failed_to_set_public = []
     failed_to_update = []
-    logger.info("Uploading networks to NDEx")
+    logger.info(f"Uploading {len(networks)} networks to NDEx")
     for go_id, network_dict in tqdm(sorted(networks.items(), key=lambda x: x[0])):
         network = network_dict["network"]
         min_score = network_dict["min_score"]
