@@ -4,7 +4,10 @@ an Ndex network from a set of statements related to a given GO term.
 """
 import json
 import logging
-from typing import List, Dict
+from itertools import combinations
+from math import dist, pi, cos, sin
+from random import random
+from typing import List, Dict, Tuple
 
 import networkx as nx
 from networkx.drawing import layout
@@ -18,6 +21,9 @@ from indra.ontology.bio import bio_ontology
 from indra.databases import identifiers
 from indra.ontology.standardize import standardize_db_refs
 from indra.databases import hgnc_client
+
+Coord = Tuple[float, float]
+NodeCoords = Dict[str, List[float]]
 
 
 logger = logging.getLogger(__name__)
@@ -78,16 +84,65 @@ def edge_attribute_from_ev_counts(source, target, ev_counts, directed) -> List[s
     return parts
 
 
-def _untangle_layout(g: nx.Graph, pos: Dict[str, List[float]]):
-    # Find the nodes that are disconnected from the rest of the graph
+def _get_position_on_circle(center: Coord, radius: float):
+    # Get a random angle (in radians)
+    rad = random() * 2 * pi
+    x = radius * cos(rad) + center[0]
+    y = radius * sin(rad) + center[1]
+
+    return x, y
+
+
+def _is_too_close(coord: Coord, node_positions: NodeCoords, min_dist: float):
+    # Check if coords are within min_dist of any of the coordinates in the
+    # keyed positions
+    for other_coord in node_positions.values():
+        if dist(coord, other_coord) < min_dist:
+            return True
+
+    return False
+
+
+def _move_nodes_apart(
+    pos: NodeCoords, min_dist: float, x_mm: Coord, y_mm: Coord
+):
+    # Any nodes that are on top of each other should be moved apart, without
+    # creating any new overlap
+
+    def _is_within(c: Coord):
+        return x_mm[0] < c[0] < x_mm[1] and y_mm[0] < c[1] < y_mm[1]
+
+    # First calculate the euclidian distance between all nodes
+    node_pairs = [
+        sorted(c, key=lambda x: x[0]) for c in combinations(pos.keys(), 2)
+    ]
+    distances = {(n1, n2): dist(pos[n1], pos[n2]) for n1, n2 in node_pairs}
+
+    # Loop the pairs and update the position if it's too close
+    for n1, n2 in node_pairs:
+        if distances[(n1, n2)] < min_dist:
+            # Move n1 to a random position a radius == min_dist away from n2
+            xy1_new = _get_position_on_circle(pos[n2], min_dist)
+            new_min = min_dist
+
+            # While the new position is still within the min-max of all
+            # coordinates and there still is overlap, try a new distance and
+            # angle
+            while _is_within(xy1_new) and _is_too_close(xy1_new, pos, new_min):
+                new_min += 0.5*min_dist
+                xy1_new = _get_position_on_circle(pos[n2], new_min)
+
+            # Replace the current position of n1
+            pos[n1] = list(xy1_new)
+
+
+def _untangle_layout(g: nx.Graph, pos: NodeCoords):
+    # Find the nodes that are disconnected from the rest of the graph and
+    # find and fix overlapping nodes
     disconnected_nodes = []
     for node in pos:
         if nx.degree(g, node) == 0:
             disconnected_nodes.append(node)
-
-    # If there are no disconnected nodes, return
-    if not disconnected_nodes:
-        return
 
     # Find min and max x and y values as well as the distance between them
     y_max = max(pos.values(), key=lambda x: x[1])[1]
@@ -98,15 +153,22 @@ def _untangle_layout(g: nx.Graph, pos: Dict[str, List[float]]):
     x_min = min(pos.values(), key=lambda x: x[0])[0]
     x_dist = x_max - x_min
 
-    # Sort the nodes lexicographically by name: 0-9, A-Z, a-z
-    disconnected_nodes = sorted(sorted(disconnected_nodes), key=str.upper)
+    # If there are disconnected nodes, move them to the bottom
+    if disconnected_nodes:
+        # Sort the nodes lexicographically by name: 0-9, A-Z, a-z
+        disconnected_nodes = sorted(sorted(disconnected_nodes), key=str.upper)
 
-    # Move the disconnected nodes to below the graph at 10 % of the
-    # y-distance, then set the x position linearly from the min to max with
-    # no more than 10 nodes per row with 10 % of the x-distance between rows
-    for n, node in enumerate(disconnected_nodes):
-        pos[node][0] = x_min + ((n % 10) + 0.5) * (x_dist / 10)
-        pos[node][1] = y_min - 0.1 * y_dist * (1 + ((n // 10) % 10))
+        # Move the disconnected nodes to below the graph at 10 % of the
+        # y-distance, then set the x position linearly from the min to max with
+        # no more than 10 nodes per row with 10 % of the x-distance between rows
+        for n, node in enumerate(disconnected_nodes):
+            pos[node][0] = x_min + ((n % 10) + 0.5) * (x_dist / 10)
+            pos[node][1] = y_min - 0.1 * y_dist * (1 + ((n // 10) % 10))
+
+    # Now check if any nodes are still on top of each other and move them a
+    # distance apart if possible
+    _move_nodes_apart(pos, min_dist=0.05 * x_dist,
+                      x_mm=(x_min, x_max), y_mm=(y_min, y_max))
 
 
 def _get_cx_layout(
