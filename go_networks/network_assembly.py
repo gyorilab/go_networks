@@ -355,7 +355,7 @@ class GoNetworkAssembler:
             )
 
         # Get layout by name now that the network is built
-        node_layout_by_name = _get_cx_layout(self.network)
+        node_layout_by_name = get_cx_layout(self.network)
 
         # Loop the entities again to add coordinates for each node
         layout_aspect = []
