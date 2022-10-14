@@ -41,6 +41,7 @@ GO_MAPPINGS = cache.join(name="go_mappings.pkl")
 COGEX_SIF = cache.join(name="cogex_sif.pkl")
 PROPS_FILE = cache.join(name="props.pkl")
 GO_NETWORKS = cache.join(name="networks.pkl")
+NCX_CACHE = cache.module("ncx_cache")
 DEFAULT_NDEX_SERVER = "http://ndexbio.org"
 TEST_GO_ID = None
 
@@ -480,13 +481,21 @@ def download_ncx_from_uuids(ncx_uuids):
     return res
 
 
-def get_ncx_cache_from_set(ncx_set_uuid: str):
+def get_ncx_cache_from_set(ncx_set_uuid: str, refresh=False):
+    """Get the set of ncx networks from a network set and cache them"""
     ncx_cache = {}
     ndex_web_client = get_ndex_web_client()
     ncx_uuids = get_networks_in_set(ncx_set_uuid, client=ndex_web_client)
     for ncx_uuid in tqdm(ncx_uuids,
                          desc=f"Downloading NCX from set {ncx_set_uuid}"):
-        ncx = create_nice_cx_from_server(uuid=ncx_uuid, **NDEX_ARGS)
+        ncx_file = NCX_CACHE.join(name=f"{ncx_uuid}.pkl")
+        if not refresh and ncx_file.is_file():
+            with ncx_file.open("rb") as f:
+                ncx = pickle.load(f)
+        else:
+            ncx = create_nice_cx_from_server(uuid=ncx_uuid, **NDEX_ARGS)
+            with ncx_file.open("wb") as f:
+                pickle.dump(obj=ncx, file=f)
 
         # network_info = ndex_web_client.get_network_summary(ncx_uuid)
 
