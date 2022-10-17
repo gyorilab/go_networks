@@ -557,7 +557,10 @@ def get_go_uuid_mapping(set_uuid: str) -> Dict[str, str]:
 
 
 def update_coordinates_for_network_set(set_uuid: str):
-    """Update the coordinates for a network set"""
+    """Update the coordinates for a network set
+
+    Returns the set of UUIDs that failed a second time
+    """
     ndex_web_client = get_ndex_web_client()
 
     # Get the network UUIDs for the given network set
@@ -573,12 +576,13 @@ def update_coordinates_for_network_set(set_uuid: str):
         except Exception:
             failed.add(network_uuid)
 
+    second_fail = set()
     if failed:
         logger.info(f"{len(failed)} updates failed, retrying after 10 s sleep")
         from time import sleep
         sleep(10)
         for network_uuid in tqdm(
-                failed, len(failed), desc="Retrying updating coordinates"
+                failed, total=len(failed), desc="Retrying updating coordinates"
         ):
             try:
                 update_coordinates_for_network(ncx_uuid=network_uuid,
@@ -587,6 +591,11 @@ def update_coordinates_for_network_set(set_uuid: str):
                 tqdm.write(
                     f"Failed a second time for uuid {network_uuid}: {err}"
                 )
+                second_fail.add(network_uuid)
+    if second_fail:
+        logger.warning(f"Returning {len(second_fail)} network UUIDs that "
+                       f"failed to update a second time.")
+    return second_fail
 
 
 def update_coordinates_for_network(
