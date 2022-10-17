@@ -622,6 +622,31 @@ def update_coordinates_for_network(
                                   network_id=ncx_uuid)
 
 
+def add_to_new_set(add_from_set_uuid: str,
+                   new_set_uuid: str,
+                   ndex_client: Optional[ndex2.Ndex2] = None):
+    """Add networks from one set to another"""
+    # Get client if not provided
+    t = tqdm(desc="Adding networks to new set", total=3)
+    ndex_client = get_ndex_web_client() if ndex_client is None else ndex_client
+    t.update()
+
+    # Get the networks in the input set
+    network_uuids = get_networks_in_set(network_set_id=add_from_set_uuid,
+                                        client=ndex_client)
+    t.update()
+
+    # Add the networks to the new set
+    # NOTE: the docstring typing in 'add_networks_to_networkset' says it
+    # returns None but a quick look at the code shows that it returns
+    # res.text or res.json() from a 'requests' response
+    res = ndex_client.add_networks_to_networkset(set_id=new_set_uuid,
+                                                 networks=network_uuids)
+    t.update()
+    t.close()
+    return res
+
+
 def format_and_update_network(
     ncx: NiceCXNetwork,
     network_set_id: str,
