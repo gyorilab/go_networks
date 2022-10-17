@@ -721,6 +721,21 @@ def get_networks_before_date_for_user(
     return res
 
 
+def delete_networks(network_uuids: Set[str], ndex_client: ndex2.Ndex2):
+    """Delete the networks provided by the UUIDs, return those that failed"""
+    failed = set()
+    for uuid in tqdm(network_uuids, desc="Deleting networks"):
+        try:
+            ndex_client.delete_network(uuid)
+        except Exception:
+            failed.add(uuid)
+
+    if failed:
+        logger.warning(f"{len(failed)} deletions failed")
+
+    return failed
+
+
 def format_and_update_network(
     ncx: NiceCXNetwork,
     network_set_id: str,
