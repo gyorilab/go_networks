@@ -4,9 +4,10 @@ Generate GO Networks from a list of GO terms and the Sif dump.
 import logging
 import pickle
 from collections import defaultdict
+from datetime import datetime
 from itertools import combinations
 from textwrap import dedent
-from typing import Dict, Iterator, Optional, Set, Tuple, Union
+from typing import Dict, Iterator, Optional, Set, Tuple, Union, List
 
 import ndex2.client
 import pandas as pd
@@ -644,6 +645,79 @@ def add_to_new_set(add_from_set_uuid: str,
                                                  networks=network_uuids)
     t.update()
     t.close()
+    return res
+
+
+def get_networks_and_date_for_user(
+        user: str, ndex_client: Optional[ndex2.Ndex2] = None
+) -> List[Dict[str, Union[datetime, str]]]:
+    """Get network UUIDs together with their creation and modification date"""
+    def _get_dt(raw_ts: int) -> datetime:
+        str_ts = str(raw_ts)
+        return datetime.fromtimestamp(float(f"{str_ts[:10]}.{str_ts[10:]}"))
+
+    def _get_list(sums):
+        out = []
+        for s in sums:
+            out.append({"uuid": s["externalId"],
+                        "modificationTime": _get_dt(s["modificationTime"]),
+                        "creationTime": _get_dt(s["creationTime"])})
+        return out
+
+    # Get client if not provided
+    if ndex_client is None:
+        ndex_client = get_ndex_web_client()
+
+    res = []
+    summaries = ndex_client.get_user_network_summaries(username=user)
+    res += _get_list(summaries)
+
+    # If the returned list has 1000 entries, it was likely cut off and we
+    # need to make a new request with a new offset
+    offset = 1000
+    while len(summaries) == 1000:
+        summaries = ndex_client.get_user_network_summaries(username=user,
+                                                           offset=offset)
+        res += _get_list(summaries)
+        offset += 1000
+
+    # Check for double counting
+    uuids = set()
+    for d in res:
+        uuids.add(d["uuid"])
+
+    assert len(uuids) == len(res), "Double counted UUIDs"
+    return res
+
+
+def get_networks_before_date_for_user(
+        user: str, cutoff_date: datetime, ndex_client: Optional[ndex2.Ndex2] =
+        None
+):
+    """Get all networks created and modified before the provided date"""
+    # Check that the cutoff date is valid
+    utcnow = datetime.utcnow()
+    if cutoff_date > utcnow:
+        raise ValueError(
+            f"Cutoff date is in the future (year={cutoff_date.year}, month="
+            f"{cutoff_date.month}, day={cutoff_date.day}), please correct "
+            f"the cutoff date to be in the past"
+        )
+
+    # Get client if not provided
+    if ndex_client is None:
+        ndex_client = get_ndex_web_client()
+
+    # Get the networks UUIDs and their datetimes
+    network_dt_list = get_networks_and_date_for_user(user=user,
+                                                     ndex_client=ndex_client)
+
+    res = []
+    for dt_dict in network_dt_list:
+        if dt_dict["modificationTime"] < cutoff_date and \
+                dt_dict["creationTime"] < cutoff_date:
+            res.append(dt_dict)
+
     return res
 
 
